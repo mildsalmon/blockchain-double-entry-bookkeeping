@@ -1,0 +1,17 @@
+# local state
+.dev/
+.omc/
+
+# backend
+backend/.gradle/
+backend/.kotlin/
+backend/build/
+
+# frontend
+frontend/.next/
+frontend/node_modules/
+
+# env
+.env
+.env.local
+.DS_Store
