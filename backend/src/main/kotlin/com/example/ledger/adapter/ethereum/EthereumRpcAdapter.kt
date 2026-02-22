@@ -4,6 +4,7 @@ import com.example.ledger.adapter.common.RetryExecutor
 import com.example.ledger.adapter.ethereum.dto.BlockResponse
 import com.example.ledger.adapter.ethereum.dto.LogEntry
 import com.example.ledger.adapter.ethereum.dto.TransactionReceiptResponse
+import com.example.ledger.adapter.ethereum.dto.TransactionResponse
 import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.port.BlockchainDataPort
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -37,17 +38,18 @@ class EthereumRpcAdapter(
         val chunks = blockChunks(startBlock, latestBlock)
         val collectedTxHashes = mutableSetOf<String>()
         val blockTimestampCache = mutableMapOf<Long, Long>()
+        val txCache = mutableMapOf<String, TransactionResponse>()
 
         val logEntries = collectEventLogs(chunks, walletAddress)
         logEntries.forEach { entry ->
             entry.transactionHash?.let { collectedTxHashes.add(it.lowercase()) }
         }
 
-        collectNativeTransfers(chunks, walletAddress, collectedTxHashes, blockTimestampCache)
+        collectNativeTransfers(chunks, walletAddress, collectedTxHashes, blockTimestampCache, txCache)
 
         log.info("Collected {} unique tx hashes for {}", collectedTxHashes.size, walletAddress)
 
-        return buildRawTransactions(walletAddress, collectedTxHashes, blockTimestampCache)
+        return buildRawTransactions(walletAddress, collectedTxHashes, blockTimestampCache, txCache)
     }
 
     private fun blockChunks(fromBlock: Long, toBlock: Long): List<Pair<Long, Long>> {
@@ -96,7 +98,8 @@ class EthereumRpcAdapter(
         chunks: List<Pair<Long, Long>>,
         walletAddress: String,
         collectedTxHashes: MutableSet<String>,
-        blockTimestampCache: MutableMap<Long, Long>
+        blockTimestampCache: MutableMap<Long, Long>,
+        txCache: MutableMap<String, TransactionResponse>
     ) {
         val walletLower = walletAddress.lowercase()
         for ((chunkFrom, chunkTo) in chunks) {
@@ -112,7 +115,9 @@ class EthereumRpcAdapter(
                     val txFrom = tx.from?.lowercase()
                     val txTo = tx.to?.lowercase()
                     if (txFrom == walletLower || txTo == walletLower) {
-                        tx.hash?.lowercase()?.let { collectedTxHashes.add(it) }
+                        val hash = tx.hash?.lowercase() ?: return@forEach
+                        collectedTxHashes.add(hash)
+                        txCache[hash] = tx
                     }
                 }
             }
@@ -122,7 +127,8 @@ class EthereumRpcAdapter(
     private fun buildRawTransactions(
         walletAddress: String,
         txHashes: Set<String>,
-        blockTimestampCache: MutableMap<Long, Long>
+        blockTimestampCache: MutableMap<Long, Long>,
+        txCache: MutableMap<String, TransactionResponse>
     ): List<RawTransaction> {
         val results = mutableListOf<RawTransaction>()
 
@@ -143,13 +149,16 @@ class EthereumRpcAdapter(
                 } ?: return@getOrPut 0L
             }
 
+            val tx = txCache[txHash] ?: retryExecutor.execute {
+                rpcClient.getTransactionByHash(txHash)
+            }
+
             val blockTimestamp = Instant.ofEpochSecond(timestamp)
             val txStatus = if (receipt.status == "0x1") 1 else 0
             val txIndex = receipt.transactionIndex?.hexToInt()
 
-            val transactionNode = buildTransactionNode(receipt)
             val rawData = objectMapper.createObjectNode().apply {
-                set<com.fasterxml.jackson.databind.node.ObjectNode>("transaction", transactionNode)
+                set<com.fasterxml.jackson.databind.node.ObjectNode>("transaction", buildTransactionNode(tx, receipt))
                 set<com.fasterxml.jackson.databind.node.ObjectNode>("receipt", buildReceiptNode(receipt))
             }
 
@@ -169,14 +178,22 @@ class EthereumRpcAdapter(
         return results
     }
 
-    private fun buildTransactionNode(receipt: TransactionReceiptResponse): com.fasterxml.jackson.databind.node.ObjectNode {
+    private fun buildTransactionNode(
+        tx: TransactionResponse?,
+        receipt: TransactionReceiptResponse
+    ): com.fasterxml.jackson.databind.node.ObjectNode {
         return objectMapper.createObjectNode().apply {
             put("hash", receipt.transactionHash)
             put("blockNumber", receipt.blockNumber)
             put("blockHash", receipt.blockHash)
             put("transactionIndex", receipt.transactionIndex)
-            put("from", receipt.from)
-            put("to", receipt.to)
+            put("from", tx?.from ?: receipt.from)
+            put("to", tx?.to ?: receipt.to)
+            put("value", tx?.value ?: "0x0")
+            put("gas", tx?.gas)
+            put("gasPrice", tx?.gasPrice)
+            put("input", tx?.input)
+            put("nonce", tx?.nonce)
         }
     }
 

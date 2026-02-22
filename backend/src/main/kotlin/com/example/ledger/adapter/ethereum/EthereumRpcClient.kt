@@ -4,6 +4,7 @@ import com.example.ledger.adapter.ethereum.dto.BlockResponse
 import com.example.ledger.adapter.ethereum.dto.LogEntry
 import com.example.ledger.adapter.ethereum.dto.RpcResponse
 import com.example.ledger.adapter.ethereum.dto.TransactionReceiptResponse
+import com.example.ledger.adapter.ethereum.dto.TransactionResponse
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
@@ -68,6 +69,21 @@ class EthereumRpcClient(
         )
         response.error?.let {
             log.warn("eth_getTransactionReceipt RPC error {}: {}", it.code, it.message)
+            return null
+        }
+        return response.result
+    }
+
+    fun getTransactionByHash(txHash: String): TransactionResponse? {
+        val payload = buildRequest("eth_getTransactionByHash", listOf(txHash))
+
+        val responseBody = post(payload) ?: return null
+        val response: RpcResponse<TransactionResponse> = objectMapper.readValue(
+            responseBody,
+            object : TypeReference<RpcResponse<TransactionResponse>>() {}
+        )
+        response.error?.let {
+            log.warn("eth_getTransactionByHash RPC error {}: {}", it.code, it.message)
             return null
         }
         return response.result
