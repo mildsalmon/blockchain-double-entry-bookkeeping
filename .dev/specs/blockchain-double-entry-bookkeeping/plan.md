@@ -142,13 +142,14 @@ blockchain-double-entry-bookkeeping/
 - **Files**:
   - `backend/src/main/resources/db/migration/V5__seed_accounts.sql` (신규)
 - **MUST DO**:
-  - 기본 계정과목 7건 INSERT (FR-13):
+  - 기본 계정과목 9건 INSERT (FR-13):
     - `자산:암호화폐:ETH`, `자산:암호화폐:ERC20:*` (템플릿), `비용:가스비`, `비용:거래수수료`, `수익:실현이익`, `비용:실현손실`, `수익:에어드롭`
+    - `수익:미지정수입`, `자산:외부` [CR-037]
   - `is_system = true` 설정
 - **MUST NOT DO**:
   - 시스템 계정과목 삭제 가능하게 하지 않음
 - **Acceptance Criteria**:
-  - [ ] 앱 기동 시 `accounts` 테이블에 7건 기본 데이터 존재
+  - [ ] 앱 기동 시 `accounts` 테이블에 9건 기본 데이터 존재
 
 ---
 
@@ -225,10 +226,12 @@ blockchain-double-entry-bookkeeping/
   - **ETH 네이티브 전송 수집**: `eth_getBlockByNumber`로 블록 순회 + 지갑 관련 tx 필터링 (from/to 매칭)
   - **트랜잭션 상세**: `eth_getTransactionReceipt`로 receipt/logs 조회
   - 블록 범위 분할 조회: `eth_getLogs`의 프로바이더별 블록 범위 제한 대응 (기본 10,000 블록 단위)
+  - **[CR-040]** `eth_getLogs`에서 "too many results" 응답 수신 시 블록 범위를 절반으로 분할하여 재시도 (adaptive chunking)
   - 대량 트랜잭션(10,000건 이상) 처리: 블록 범위 청크 분할 (FR-4)
   - 응답 JSON 원본을 `raw_transactions.raw_data`에 저장 (Layer 1)
   - 실패한 트랜잭션 포함 (FR-5): `receipt.status=0x0`인 tx도 수집
   - `wallets.sync_status` 상태 관리 (PENDING → SYNCING → COMPLETED/FAILED)
+  - **[CR-034]** 지갑 등록 API에 `start_block` 옵션을 제공해 초기 동기화 시작 블록을 제한
   - Task 4의 재시도 패턴 적용
   - `ETHEREUM_RPC_URL` 환경 변수로 프로바이더 교체 가능 (Alchemy, Infura, QuickNode, 자체 노드 등)
 - **MUST NOT DO**:
@@ -238,7 +241,9 @@ blockchain-double-entry-bookkeeping/
 - **Acceptance Criteria**:
   - [ ] Mock RPC 응답으로 raw_transactions 저장 단위 테스트 통과
   - [ ] eth_getLogs 블록 범위 분할 테스트: 10,000 블록 초과 시 청크 분할 확인
+  - [ ] **[CR-040]** "too many results" 에러 발생 시 adaptive chunking으로 재시도 후 수집 성공
   - [ ] ETH 네이티브 전송 블록 스캔 테스트: 지갑 관련 tx 필터링 확인
+  - [ ] **[CR-034]** `start_block` 옵션으로 등록한 지갑이 지정 블록부터 동기화 시작
   - [ ] 실패 트랜잭션(receipt.status=0x0) 수집 확인
   - [ ] sync_status 상태 전이 테스트
 
@@ -635,8 +640,9 @@ Task 1 (스캐폴딩)
 | Uniswap V3 이벤트 디코딩 복잡도 과소평가 | High | Medium | Task 7에서 별도 격리, 실패 시 V3는 UNCLASSIFIED 처리 |
 | CoinGecko 레이트 리밋으로 NFR-1(5분) 위반 | Medium | High | 가격 배치 조회 + 캐시 적극 활용, 첫 동기화는 5분 초과 허용 |
 | FIFO 로트 추적 엣지 케이스 (로트 부족, 크로스체인 전입) | High | Medium | 로트 부족 시 0 원가 처리 + 플래그, 스코프 밖 유입은 수동 원가 입력 |
-| eth_getLogs 블록 범위 제한 (프로바이더별 상이) | Medium | High | 10,000 블록 단위 청크 분할 + 병렬 조회 |
+| eth_getLogs 블록 범위 제한 (프로바이더별 상이) | Medium | High | 10,000 블록 단위 청크 분할 + adaptive range 축소 재시도 |
 | ETH 네이티브 전송 블록 스캔 성능 (NFR-1 영향) | Medium | Medium | last_synced_block 증분 동기화 + 병렬 블록 범위 조회 |
+| Internal transaction (contract initiated ETH transfer) 미수집 | Medium | Medium | MVP known limitation으로 문서화, 필요 시 trace 계열 API 확장 |
 | 회계 분개 매핑 규칙 정확성 (도메인 전문성 부족) | High | Medium | 기본 규칙 구현 후 회계사 피드백으로 반복 수정 |
 | Kotlin + Spring Boot + Next.js 모노레포 설정 복잡도 | Low | Medium | Gradle + npm 독립 빌드, Docker Compose로 통합 |
 

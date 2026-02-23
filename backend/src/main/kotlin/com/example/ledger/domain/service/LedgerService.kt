@@ -33,6 +33,7 @@ class LedgerService(
         private const val REALIZED_GAIN_ACCOUNT = "수익:실현이익"
         private const val REALIZED_LOSS_ACCOUNT = "비용:실현손실"
         private const val AIRDROP_ACCOUNT = "수익:에어드롭"
+        private const val UNSPECIFIED_INCOME_ACCOUNT = "수익:미지정수입"
     }
 
     @SerializableTx
@@ -105,11 +106,25 @@ class LedgerService(
             .roundMoney()
 
         return when (event.eventType) {
-            EventType.INCOMING -> createIncomingEntry(walletAddress, rawTransactionId, event, entryDate, amountKrw)
+            EventType.INCOMING -> createIncomingEntry(
+                walletAddress = walletAddress,
+                rawTransactionId = rawTransactionId,
+                event = event,
+                entryDate = entryDate,
+                amountKrw = amountKrw,
+                offsetAccountCode = UNSPECIFIED_INCOME_ACCOUNT
+            )
             EventType.OUTGOING -> createOutgoingEntry(walletAddress, rawTransactionId, event, entryDate, amountKrw)
             EventType.FEE -> createFeeEntry(walletAddress, rawTransactionId, event, entryDate, amountKrw)
             EventType.SWAP -> createSwapEntry(walletAddress, rawTransactionId, event, entryDate, amountKrw)
-            EventType.MANUAL_CLASSIFIED -> createIncomingEntry(walletAddress, rawTransactionId, event, entryDate, amountKrw)
+            EventType.MANUAL_CLASSIFIED -> createIncomingEntry(
+                walletAddress = walletAddress,
+                rawTransactionId = rawTransactionId,
+                event = event,
+                entryDate = entryDate,
+                amountKrw = amountKrw,
+                offsetAccountCode = AIRDROP_ACCOUNT
+            )
             EventType.UNCLASSIFIED -> throw IllegalArgumentException("UNCLASSIFIED event cannot generate journal entry")
         }
     }
@@ -119,7 +134,8 @@ class LedgerService(
         rawTransactionId: Long,
         event: AccountingEvent,
         entryDate: Instant,
-        amountKrw: BigDecimal
+        amountKrw: BigDecimal,
+        offsetAccountCode: String
     ): JournalEntry {
         val assetAccountCode = resolveAssetAccountCode(event)
         fifoService.addLot(
@@ -139,7 +155,7 @@ class LedgerService(
             status = JournalStatus.AUTO_CLASSIFIED,
             lines = listOf(
                 line(assetAccountCode, debit = amountKrw),
-                line(AIRDROP_ACCOUNT, credit = amountKrw)
+                line(offsetAccountCode, credit = amountKrw)
             )
         )
     }

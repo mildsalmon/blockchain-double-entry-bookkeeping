@@ -24,10 +24,10 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  createWallet: (address: string, label?: string) =>
+  createWallet: (address: string, label?: string, startBlock?: number) =>
     request<Wallet>('/api/wallets', {
       method: 'POST',
-      body: JSON.stringify({ address, label })
+      body: JSON.stringify({ address, label, startBlock })
     }),
   listWallets: () => request<Wallet[]>('/api/wallets'),
   getWalletStatus: (address: string) => request<Wallet>(`/api/wallets/${address}/status`),

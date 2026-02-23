@@ -22,8 +22,8 @@ export default function WalletsPage() {
     return () => clearInterval(timer);
   }, []);
 
-  async function handleCreate(address: string) {
-    await api.createWallet(address);
+  async function handleCreate(address: string, startBlock?: number) {
+    await api.createWallet(address, undefined, startBlock);
     await loadWallets();
   }
 

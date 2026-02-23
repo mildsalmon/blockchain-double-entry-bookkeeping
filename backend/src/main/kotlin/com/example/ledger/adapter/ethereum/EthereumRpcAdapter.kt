@@ -76,9 +76,16 @@ class EthereumRpcAdapter(
         val result = mutableListOf<LogEntry>()
         for ((from, to) in chunks) {
             for (topic0 in eventTopics) {
-                val logs = retryExecutor.execute {
-                    rpcClient.getLogs(from, to, listOf(topic0))
-                }
+                val logs = fetchWithAdaptiveRange(
+                    fromBlock = from,
+                    toBlock = to,
+                    fetch = { start, end ->
+                        retryExecutor.execute {
+                            rpcClient.getLogs(start, end, listOf(topic0))
+                        }
+                    },
+                    shouldSplit = { error -> error is EthereumRpcException && isTooManyResultsError(error) }
+                )
                 val relevant = logs.filter { log -> isWalletRelatedLog(log, paddedWallet) }
                 result.addAll(relevant)
             }
@@ -214,4 +221,33 @@ private fun String.hexToInt(): Int = removePrefix("0x").ifEmpty { "0" }.toInt(16
 
 internal fun isWalletRelatedLog(log: LogEntry, paddedWalletTopic: String): Boolean {
     return log.topics.any { it.equals(paddedWalletTopic, ignoreCase = true) }
+}
+
+internal fun isTooManyResultsError(error: EthereumRpcException): Boolean {
+    val message = error.rpcMessage.lowercase()
+    return error.code == -32005
+        || error.code == -32016
+        || message.contains("too many results")
+        || message.contains("result set too large")
+        || message.contains("query returned more than")
+}
+
+internal fun <T> fetchWithAdaptiveRange(
+    fromBlock: Long,
+    toBlock: Long,
+    fetch: (Long, Long) -> List<T>,
+    shouldSplit: (Throwable) -> Boolean
+): List<T> {
+    return try {
+        fetch(fromBlock, toBlock)
+    } catch (error: Throwable) {
+        if (!shouldSplit(error) || fromBlock >= toBlock) {
+            throw error
+        }
+
+        val mid = fromBlock + ((toBlock - fromBlock) / 2)
+        val left = fetchWithAdaptiveRange(fromBlock, mid, fetch, shouldSplit)
+        val right = fetchWithAdaptiveRange(mid + 1, toBlock, fetch, shouldSplit)
+        left + right
+    }
 }
