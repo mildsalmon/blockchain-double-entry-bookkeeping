@@ -38,8 +38,7 @@ class EthereumRpcClient(
             object : TypeReference<RpcResponse<List<LogEntry>>>() {}
         )
         response.error?.let {
-            log.warn("eth_getLogs RPC error {}: {}", it.code, it.message)
-            return emptyList()
+            throw EthereumRpcException(it.code, it.message)
         }
         return response.result ?: emptyList()
     }
@@ -123,3 +122,8 @@ class EthereumRpcClient(
 
 private fun Long.toHex(): String = "0x${toString(16)}"
 private fun String.hexToLong(): Long = removePrefix("0x").ifEmpty { "0" }.toLong(16)
+
+class EthereumRpcException(
+    val code: Int,
+    val rpcMessage: String
+) : RuntimeException("Ethereum RPC error(code=$code): $rpcMessage")

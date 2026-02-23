@@ -14,7 +14,7 @@ class IngestWalletUseCase(
     private val syncPipelineUseCase: SyncPipelineUseCase
 ) {
 
-    fun registerWallet(address: String, label: String? = null): WalletResponse {
+    fun registerWallet(address: String, label: String? = null, startBlock: Long? = null): WalletResponse {
         val existing = walletRepository.findByAddress(address)
         if (existing != null) {
             syncPipelineUseCase.syncAsync(address)
@@ -27,7 +27,7 @@ class IngestWalletUseCase(
                 label = label,
                 syncStatus = SyncStatus.PENDING,
                 lastSyncedAt = null,
-                lastSyncedBlock = null,
+                lastSyncedBlock = startBlock,
                 createdAt = Instant.now(),
                 updatedAt = Instant.now()
             )
