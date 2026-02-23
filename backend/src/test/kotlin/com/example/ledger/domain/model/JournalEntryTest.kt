@@ -72,6 +72,54 @@ class JournalEntryTest {
         assertEquals(BigDecimal("1500"), updated.lines.first().debitAmount)
     }
 
+    @Test
+    fun `cannot change token metadata when updating journal`() {
+        val entry = JournalEntry(
+            rawTransactionId = 1L,
+            entryDate = Instant.parse("2026-02-22T00:00:00Z"),
+            description = "토큰 메타데이터 검증",
+            status = JournalStatus.REVIEW_REQUIRED,
+            lines = listOf(
+                JournalLine(
+                    accountCode = "자산:암호화폐:ETH",
+                    debitAmount = BigDecimal("1000"),
+                    creditAmount = BigDecimal.ZERO,
+                    tokenSymbol = "ETH",
+                    tokenQuantity = BigDecimal("0.25")
+                ),
+                JournalLine(
+                    accountCode = "수익:에어드롭",
+                    debitAmount = BigDecimal.ZERO,
+                    creditAmount = BigDecimal("1000"),
+                    tokenSymbol = "ETH",
+                    tokenQuantity = BigDecimal("0.25")
+                )
+            )
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            entry.update(
+                lines = listOf(
+                    JournalLine(
+                        accountCode = "자산:암호화폐:ETH",
+                        debitAmount = BigDecimal("1000"),
+                        creditAmount = BigDecimal.ZERO,
+                        tokenSymbol = "ETH",
+                        tokenQuantity = BigDecimal("0.30")
+                    ),
+                    JournalLine(
+                        accountCode = "수익:에어드롭",
+                        debitAmount = BigDecimal.ZERO,
+                        creditAmount = BigDecimal("1000"),
+                        tokenSymbol = "ETH",
+                        tokenQuantity = BigDecimal("0.30")
+                    )
+                ),
+                memo = "토큰 수량 변경 시도"
+            )
+        }
+    }
+
     private fun validEntry(status: JournalStatus): JournalEntry {
         return JournalEntry(
             id = null,

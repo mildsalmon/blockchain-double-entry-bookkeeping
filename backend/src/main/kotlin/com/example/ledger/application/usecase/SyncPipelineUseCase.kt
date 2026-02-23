@@ -1,13 +1,14 @@
 package com.example.ledger.application.usecase
 
-import com.example.ledger.adapter.web3.EventDecoder
 import com.example.ledger.domain.model.AccountingEvent
+import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.model.PriceSource
 import com.example.ledger.domain.model.SyncStatus
 import com.example.ledger.domain.port.AccountingEventRepository
 import com.example.ledger.domain.port.BlockchainDataPort
 import com.example.ledger.domain.port.PricePort
 import com.example.ledger.domain.port.RawTransactionRepository
+import com.example.ledger.domain.port.TransactionDecoderPort
 import com.example.ledger.domain.port.WalletRepository
 import com.example.ledger.domain.service.ClassificationService
 import com.example.ledger.domain.service.LedgerService
@@ -21,7 +22,7 @@ class SyncPipelineUseCase(
     private val walletRepository: WalletRepository,
     private val blockchainDataPort: BlockchainDataPort,
     private val rawTransactionRepository: RawTransactionRepository,
-    private val eventDecoder: EventDecoder,
+    private val transactionDecoder: TransactionDecoderPort,
     private val classificationService: ClassificationService,
     private val accountingEventRepository: AccountingEventRepository,
     private val pricePort: PricePort,
@@ -43,6 +44,11 @@ class SyncPipelineUseCase(
         try {
             val rawTransactions = blockchainDataPort.fetchTransactions(walletAddress, wallet.lastSyncedBlock)
             val savedRawTransactions = rawTransactionRepository.saveAll(rawTransactions)
+                .sortedWith(
+                    compareBy<RawTransaction> { it.blockNumber }
+                        .thenBy { it.txIndex ?: Int.MAX_VALUE }
+                        .thenBy { it.txHash }
+                )
 
             var maxBlock = wallet.lastSyncedBlock ?: 0L
 
@@ -51,7 +57,7 @@ class SyncPipelineUseCase(
                     maxBlock = rawTx.blockNumber
                 }
 
-                val decoded = eventDecoder.decode(rawTx)
+                val decoded = transactionDecoder.decode(rawTx)
                 val classified = classificationService.classify(decoded)
                 val enriched = classified.map { enrichPrice(it, rawTx.blockTimestamp) }
                 val savedEvents = accountingEventRepository.saveAll(enriched)

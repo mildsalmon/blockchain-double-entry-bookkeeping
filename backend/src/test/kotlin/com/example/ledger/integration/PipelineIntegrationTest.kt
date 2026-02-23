@@ -151,14 +151,79 @@ class PipelineIntegrationTest : IntegrationTestBase() {
         assertTrue(journals.isNotEmpty())
     }
 
+    @Test
+    fun `sync pipeline processes transactions in block order before fifo calculations`() {
+        val walletAddress = "0x4444444444444444444444444444444444444444"
+        walletRepository.save(Wallet(address = walletAddress))
+
+        val incoming = rawTransfer(
+            walletAddress = walletAddress,
+            txHash = "0xincoming",
+            blockNumber = 100L,
+            txIndex = 0,
+            from = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            to = walletAddress,
+            value = "1.0",
+            timestamp = Instant.parse("2026-02-01T00:00:00Z"),
+            gasUsedHex = "0x0",
+            effectiveGasPriceHex = "0x0"
+        )
+
+        val outgoing = rawTransfer(
+            walletAddress = walletAddress,
+            txHash = "0xoutgoing",
+            blockNumber = 200L,
+            txIndex = 0,
+            from = walletAddress,
+            to = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            value = "1.0",
+            timestamp = Instant.parse("2026-02-02T00:00:00Z"),
+            gasUsedHex = "0x0",
+            effectiveGasPriceHex = "0x0"
+        )
+
+        whenever(blockchainDataPort.fetchTransactions(eq(walletAddress), anyOrNull())).thenReturn(
+            listOf(outgoing, incoming)
+        )
+
+        whenever(pricePort.getPrice(anyOrNull(), any(), any())).thenAnswer { invocation ->
+            val date = invocation.getArgument<LocalDate>(2)
+            val price = when (date) {
+                LocalDate.of(2026, 2, 1) -> BigDecimal("100")
+                LocalDate.of(2026, 2, 2) -> BigDecimal("150")
+                else -> BigDecimal.ZERO
+            }
+
+            PriceInfo(
+                tokenAddress = null,
+                tokenSymbol = "ETH",
+                date = date,
+                priceKrw = price,
+                source = PriceSource.COINGECKO
+            )
+        }
+
+        syncPipelineUseCase.sync(walletAddress)
+
+        val journals = journalRepository.findByFilters(size = 100)
+        val outgoingJournal = journals.first { it.description == "Outgoing ETH" }
+        val realizedGain = outgoingJournal.lines.firstOrNull { it.accountCode == "수익:실현이익" }
+
+        assertNotNull(realizedGain)
+        assertEquals(0, realizedGain.creditAmount.compareTo(BigDecimal("50.00000000")))
+    }
+
     private fun rawTransfer(
         walletAddress: String,
         txHash: String,
         blockNumber: Long,
+        txIndex: Int = 1,
         from: String,
         to: String,
         value: String,
-        timestamp: Instant
+        timestamp: Instant,
+        gasUsedHex: String = "0x5208",
+        effectiveGasPriceHex: String = "0x2540be400"
     ): RawTransaction {
         val weiValue = java.math.BigDecimal(value).multiply(java.math.BigDecimal.TEN.pow(18)).toBigInteger()
         val valueHex = "0x${weiValue.toString(16)}"
@@ -171,8 +236,8 @@ class PipelineIntegrationTest : IntegrationTestBase() {
 
         val receiptNode = objectMapper.createObjectNode()
             .put("status", "0x1")
-            .put("gasUsed", "0x5208")
-            .put("effectiveGasPrice", "0x2540be400")
+            .put("gasUsed", gasUsedHex)
+            .put("effectiveGasPrice", effectiveGasPriceHex)
         receiptNode.putArray("logs")
 
         val rawData = objectMapper.createObjectNode()
@@ -183,7 +248,7 @@ class PipelineIntegrationTest : IntegrationTestBase() {
             walletAddress = walletAddress,
             txHash = txHash,
             blockNumber = blockNumber,
-            txIndex = 1,
+            txIndex = txIndex,
             blockTimestamp = timestamp,
             rawData = rawData,
             txStatus = 1

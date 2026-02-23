@@ -17,8 +17,6 @@ private const val BLOCK_CHUNK_SIZE = 10_000L
 private const val TOPIC_ERC20_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 private const val TOPIC_ERC1155_TRANSFER_SINGLE = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
 private const val TOPIC_ERC1155_TRANSFER_BATCH = "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb"
-private const val TOPIC_UNISWAP_V2_SWAP = "0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822"
-private const val TOPIC_UNISWAP_V3_SWAP = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"
 
 @Component
 class EthereumRpcAdapter(
@@ -72,9 +70,7 @@ class EthereumRpcAdapter(
         val eventTopics = listOf(
             TOPIC_ERC20_TRANSFER,
             TOPIC_ERC1155_TRANSFER_SINGLE,
-            TOPIC_ERC1155_TRANSFER_BATCH,
-            TOPIC_UNISWAP_V2_SWAP,
-            TOPIC_UNISWAP_V3_SWAP
+            TOPIC_ERC1155_TRANSFER_BATCH
         )
 
         val result = mutableListOf<LogEntry>()
@@ -83,11 +79,7 @@ class EthereumRpcAdapter(
                 val logs = retryExecutor.execute {
                     rpcClient.getLogs(from, to, listOf(topic0))
                 }
-                val relevant = logs.filter { log ->
-                    log.topics.any { it.lowercase() == paddedWallet }
-                        || topic0 == TOPIC_UNISWAP_V2_SWAP
-                        || topic0 == TOPIC_UNISWAP_V3_SWAP
-                }
+                val relevant = logs.filter { log -> isWalletRelatedLog(log, paddedWallet) }
                 result.addAll(relevant)
             }
         }
@@ -219,3 +211,7 @@ class EthereumRpcAdapter(
 
 private fun String.hexToLong(): Long = removePrefix("0x").ifEmpty { "0" }.toLong(16)
 private fun String.hexToInt(): Int = removePrefix("0x").ifEmpty { "0" }.toInt(16)
+
+internal fun isWalletRelatedLog(log: LogEntry, paddedWalletTopic: String): Boolean {
+    return log.topics.any { it.equals(paddedWalletTopic, ignoreCase = true) }
+}

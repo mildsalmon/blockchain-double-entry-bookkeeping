@@ -16,14 +16,14 @@ DAO와 크립토 프로젝트는 투명한 재무 감사가 필요하지만, 블
 Ethereum 블록체인 데이터를 읽어 특정 지갑의 복식부기 원장(Journal Entries)을 자동 생성하는 웹 애플리케이션.
 
 **핵심 기능**:
-1. 지갑 주소 입력 → Ethereum 트랜잭션 수집 (Alchemy getAssetTransfers API)
+1. 지갑 주소 입력 → Ethereum 트랜잭션 수집 (표준 Ethereum JSON-RPC: eth_getLogs + eth_getBlockByNumber)
 2. 트랜잭션 분류 엔진 — ETH 전송, ERC-20 전송, 가스비, DEX 스왑 등을 회계 이벤트로 변환
 3. 복식부기 분개 자동 생성 (차변/대변) with 원화(KRW) 환산
 4. 회계사가 검토/수정/승인하는 "Reconciliation" UI
 5. 감사 추적(Audit Trail) — 모든 분개는 원본 tx hash, 분류 규칙, 가격 출처에 연결
 
 **아키텍처 (3-Layer)**:
-- Layer 1 (Raw): 불변 원본 체인 데이터 (Alchemy 응답 JSON)
+- Layer 1 (Raw): 불변 원본 체인 데이터 (RPC 응답 JSON)
 - Layer 2 (Normalized): 분류된 회계 이벤트 (`Incoming`, `Outgoing`, `Swap`, `Fee` 등)
 - Layer 3 (Ledger): 복식부기 분개 (차변/대변 Journal Entries)
 
@@ -50,7 +50,7 @@ Ethereum 블록체인 데이터를 읽어 특정 지갑의 복식부기 원장(J
 **기술 스택 후보**:
 | 영역 | 후보 | 비고 |
 |------|------|------|
-| 데이터 수집 | Alchemy getAssetTransfers | 주소 이력 조회에 최적, 500x 빠름 |
+| 데이터 수집 | Ethereum JSON-RPC (eth_getLogs + eth_getBlockByNumber) | 표준 RPC, 프로바이더 교체 자유 |
 | 트랜잭션 파싱 | viem (TypeScript) | 최신 ABI 디코딩, ethers.js 대안 |
 | 원장 엔진 | medici (MongoDB) 또는 Custom PostgreSQL | **미결정 — /specify에서 결정 필요** |
 | 가격 데이터 | CoinGecko API + DEX 가격 fallback | KRW 환산 필수 |
@@ -116,7 +116,7 @@ Ethereum 블록체인 데이터를 읽어 특정 지갑의 복식부기 원장(J
 - [Tres Finance](https://tres.finance) — Web3 재무 플랫폼
 
 **데이터 소스**:
-- [Alchemy Transfers API](https://docs.alchemy.com/reference/transfers-api-quickstart)
+- [Ethereum JSON-RPC Specification](https://ethereum.github.io/execution-apis/api-documentation/)
 - [Etherscan API](https://docs.etherscan.io/)
 - [ethereum-etl](https://github.com/blockchain-etl/ethereum-etl)
 
