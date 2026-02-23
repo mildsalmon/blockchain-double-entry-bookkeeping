@@ -149,7 +149,7 @@ blockchain-double-entry-bookkeeping/
 - **MUST NOT DO**:
   - 시스템 계정과목 삭제 가능하게 하지 않음
 - **Acceptance Criteria**:
-  - [ ] 앱 기동 시 `accounts` 테이블에 7건 기본 데이터 존재
+  - [ ] 앱 기동 시 `accounts` 테이블에 9건 기본 데이터 존재
 
 ---
 
