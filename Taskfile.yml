@@ -38,6 +38,12 @@ tasks:
     cmds:
       - docker compose logs -f postgres
 
+  db:reset:
+    desc: "Reset local PostgreSQL volume (WARNING: deletes local data)"
+    cmds:
+      - docker compose down -v --remove-orphans
+      - docker compose up -d
+
   backend:run:
     desc: Run backend server (Spring Boot)
     cmds:

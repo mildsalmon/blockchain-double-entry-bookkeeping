@@ -33,6 +33,7 @@ task                 # 전체 task 목록
 task backend:run     # 백엔드만 실행
 task frontend:dev    # 프론트만 실행
 task verify          # backend test + frontend build
+task db:reset        # DB 볼륨 초기화 (로컬 데이터 삭제)
 task down            # DB 종료
 task db:logs         # DB 로그 확인
 ```
@@ -43,6 +44,34 @@ task db:logs         # DB 로그 확인
 docker compose up -d
 cd backend && JAVA_HOME=$(/usr/libexec/java_home -v 17) ./gradlew bootRun
 cd frontend && npm install && npm run dev
+```
+
+## Troubleshooting
+
+`task dev` 실행 시 아래와 같은 Flyway 오류가 나오면:
+
+`Either revert the changes to the migration, or run repair to update the schema history.`
+
+로컬 DB에 저장된 migration checksum과 현재 코드가 불일치한 상태입니다. 로컬 개발 환경 기준 가장 빠른 복구:
+
+```bash
+task db:reset
+task dev
+```
+
+주의: `task db:reset`은 로컬 PostgreSQL 볼륨을 삭제하므로 데이터가 초기화됩니다.
+
+`ERROR: JAVA_HOME is set to an invalid directory` 오류가 나오면:
+
+```bash
+unset JAVA_HOME
+task backend:run
+```
+
+또는 JDK 17 경로를 직접 지정해서 실행:
+
+```bash
+cd backend && JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ./gradlew bootRun
 ```
 
 ## Wallet Registration
