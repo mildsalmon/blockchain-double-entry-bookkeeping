@@ -8,19 +8,20 @@ import com.example.ledger.domain.model.DecodedTransaction
 import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.model.SwapEvent
 import com.example.ledger.domain.model.TransferEvent
+import com.example.ledger.domain.port.TransactionDecoderPort
 import com.fasterxml.jackson.databind.JsonNode
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.math.BigInteger
 
 @Component
-class EventDecoder {
+class EventDecoder : TransactionDecoderPort {
     companion object {
         private val TWO_POW_256: BigInteger = BigInteger.ONE.shiftLeft(256)
         private val WEI_PER_ETH: BigDecimal = BigDecimal.TEN.pow(18)
     }
 
-    fun decode(rawTransaction: RawTransaction): DecodedTransaction {
+    override fun decode(rawTransaction: RawTransaction): DecodedTransaction {
         val txNode = rawTransaction.rawData.path("transaction")
         val receiptNode = rawTransaction.rawData.path("receipt")
 

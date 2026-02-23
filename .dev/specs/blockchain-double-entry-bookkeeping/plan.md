@@ -25,7 +25,7 @@ blockchain-double-entry-bookkeeping/
 │   │       ├── adapter/              # Adapter Layer
 │   │       │   ├── web/              # REST Controllers
 │   │       │   ├── persistence/      # JPA Repositories
-│   │       │   ├── alchemy/          # Alchemy API Client
+│   │       │   ├── ethereum/         # Ethereum RPC Client
 │   │       │   ├── coingecko/        # CoinGecko API Client
 │   │       │   └── export/           # CSV/Excel Exporter
 │   │       └── config/               # Spring Config
@@ -49,7 +49,7 @@ blockchain-double-entry-bookkeeping/
 - **Domain**: 도메인 모델(RawTransaction, AccountingEvent, JournalEntry, CostBasisLot), 서비스(ClassificationService, LedgerService, FifoService), 포트(TransactionRepository, PricePort, ClassifierPlugin)
 - **Port (Driving)**: Use Cases — IngestWalletUseCase, ClassifyTransactionsUseCase, GenerateLedgerUseCase, ExportUseCase
 - **Port (Driven)**: TransactionRepository, AccountingEventRepository, JournalRepository, PricePort, BlockchainDataPort
-- **Adapter**: AlchemyAdapter (BlockchainDataPort), CoinGeckoAdapter (PricePort), JpaRepositories (Repository ports), RestControllers (Driving), CsvExporter, ExcelExporter
+- **Adapter**: EthereumRpcAdapter (BlockchainDataPort), CoinGeckoAdapter (PricePort), JpaRepositories (Repository ports), RestControllers (Driving), CsvExporter, ExcelExporter
 
 ## Tasks
 
@@ -75,7 +75,7 @@ blockchain-double-entry-bookkeeping/
   - 의존성: Spring Web, Spring Data JPA, Flyway, Jackson, PostgreSQL Driver
   - Next.js 14+ + TypeScript + Tailwind CSS 프로젝트 생성
   - Docker Compose: PostgreSQL 16 서비스 정의
-  - `.env.example`에 ALCHEMY_API_KEY, COINGECKO_API_KEY 자리 포함
+  - `.env.example`에 ETHEREUM_RPC_URL, COINGECKO_API_KEY 자리 포함
   - 빌드 및 실행 확인 (backend `./gradlew bootRun`, frontend `npm run dev`)
   - **[CR-008]** Spring Boot CORS 설정: `WebMvcConfigurer.addCorsMappings()`로 `localhost:3000` 허용, 또는 `next.config.js`에 `/api/*` → `localhost:8080` 프록시 rewrite 설정
 - **MUST NOT DO**:
@@ -209,29 +209,37 @@ blockchain-double-entry-bookkeeping/
 
 ---
 
-### Task 5: Alchemy 인제스션 어댑터
+### Task 5: Ethereum RPC 인제스션 어댑터
 
 - **Files**:
-  - `backend/src/main/kotlin/com/example/ledger/adapter/alchemy/AlchemyClient.kt` (신규)
-  - `backend/src/main/kotlin/com/example/ledger/adapter/alchemy/AlchemyAdapter.kt` (신규)
-  - `backend/src/main/kotlin/com/example/ledger/adapter/alchemy/dto/` (신규)
+  - `backend/src/main/kotlin/com/example/ledger/adapter/ethereum/EthereumRpcClient.kt` (신규)
+  - `backend/src/main/kotlin/com/example/ledger/adapter/ethereum/EthereumRpcAdapter.kt` (신규)
+  - `backend/src/main/kotlin/com/example/ledger/adapter/ethereum/dto/` (신규)
   - `backend/src/main/kotlin/com/example/ledger/adapter/persistence/RawTransactionJpaRepository.kt` (신규)
   - `backend/src/main/kotlin/com/example/ledger/adapter/persistence/WalletJpaRepository.kt` (신규)
   - `backend/src/main/kotlin/com/example/ledger/adapter/persistence/entity/` (신규 — JPA 엔티티)
 - **MUST DO**:
-  - `BlockchainDataPort` 구현: Alchemy `getAssetTransfers` 호출
-  - 페이지네이션 (`pageKey`) 처리 (FR-4)
+  - `BlockchainDataPort` 구현: 표준 Ethereum JSON-RPC 메서드 사용
+  - **ERC-20/721/1155 이벤트 수집**: `eth_getLogs`로 Transfer 이벤트 토픽 필터링 (블록 범위 단위)
+  - **Uniswap Swap 이벤트 수집**: `eth_getLogs`로 Swap 이벤트 토픽 필터링
+  - **ETH 네이티브 전송 수집**: `eth_getBlockByNumber`로 블록 순회 + 지갑 관련 tx 필터링 (from/to 매칭)
+  - **트랜잭션 상세**: `eth_getTransactionReceipt`로 receipt/logs 조회
+  - 블록 범위 분할 조회: `eth_getLogs`의 프로바이더별 블록 범위 제한 대응 (기본 10,000 블록 단위)
+  - 대량 트랜잭션(10,000건 이상) 처리: 블록 범위 청크 분할 (FR-4)
   - 응답 JSON 원본을 `raw_transactions.raw_data`에 저장 (Layer 1)
-  - 실패한 트랜잭션 포함 (FR-5): `getAssetTransfers`에서 누락 시 별도 `eth_getTransactionReceipt` 호출
+  - 실패한 트랜잭션 포함 (FR-5): `receipt.status=0x0`인 tx도 수집
   - `wallets.sync_status` 상태 관리 (PENDING → SYNCING → COMPLETED/FAILED)
   - Task 4의 재시도 패턴 적용
+  - `ETHEREUM_RPC_URL` 환경 변수로 프로바이더 교체 가능 (Alchemy, Infura, QuickNode, 자체 노드 등)
 - **MUST NOT DO**:
   - 분류/가격 로직을 이 어댑터에 포함하지 않음
-  - 실제 Alchemy API 호출이 포함된 테스트를 단위 테스트로 작성하지 않음 (mock 사용)
+  - 프로바이더 독점 API (getAssetTransfers 등) 사용하지 않음 — 표준 JSON-RPC만 사용
+  - 실제 RPC 호출이 포함된 테스트를 단위 테스트로 작성하지 않음 (mock 사용)
 - **Acceptance Criteria**:
-  - [ ] Mock Alchemy 응답으로 raw_transactions 저장 단위 테스트 통과
-  - [ ] 페이지네이션 테스트: 2페이지 이상 처리 확인
-  - [ ] 실패 트랜잭션 수집 확인
+  - [ ] Mock RPC 응답으로 raw_transactions 저장 단위 테스트 통과
+  - [ ] eth_getLogs 블록 범위 분할 테스트: 10,000 블록 초과 시 청크 분할 확인
+  - [ ] ETH 네이티브 전송 블록 스캔 테스트: 지갑 관련 tx 필터링 확인
+  - [ ] 실패 트랜잭션(receipt.status=0x0) 수집 확인
   - [ ] sync_status 상태 전이 테스트
 
 ---
@@ -557,7 +565,7 @@ blockchain-double-entry-bookkeeping/
     - `JournalApiIntegrationTest.kt`
     - `ExportIntegrationTest.kt`
 - **MUST DO**:
-  - 전체 파이프라인 통합 테스트: 지갑 등록 → raw_transactions → accounting_events → journal_entries (mock Alchemy/CoinGecko)
+  - 전체 파이프라인 통합 테스트: 지갑 등록 → raw_transactions → accounting_events → journal_entries (mock RPC/CoinGecko)
   - 분개 수정 → audit_log 기록 확인
   - 분개 승인 → 이후 수정 불가 확인
   - CSV/Excel 내보내기 → 파일 내용 검증
@@ -581,7 +589,7 @@ Task 1 (스캐폴딩)
   └── Task 3 (도메인 모델 + 포트) ─────────────────────────┤
         │                                                 │
         ├── Task 4 (복원력 패턴 + SERIALIZABLE)             │
-        │     ├── Task 5 (Alchemy 어댑터) ──── [2b 필요]   │
+        │     ├── Task 5 (RPC 어댑터) ──────── [2b 필요]   │
         │     └── Task 6 (CoinGecko 어댑터) ── [2a 필요]   │
         │                                                 │
         ├── Task 7 (ABI 디코딩/web3j)                      │
@@ -627,7 +635,8 @@ Task 1 (스캐폴딩)
 | Uniswap V3 이벤트 디코딩 복잡도 과소평가 | High | Medium | Task 7에서 별도 격리, 실패 시 V3는 UNCLASSIFIED 처리 |
 | CoinGecko 레이트 리밋으로 NFR-1(5분) 위반 | Medium | High | 가격 배치 조회 + 캐시 적극 활용, 첫 동기화는 5분 초과 허용 |
 | FIFO 로트 추적 엣지 케이스 (로트 부족, 크로스체인 전입) | High | Medium | 로트 부족 시 0 원가 처리 + 플래그, 스코프 밖 유입은 수동 원가 입력 |
-| Alchemy getAssetTransfers에 실패 tx 미포함 | Medium | Medium | eth_getTransactionReceipt 보조 호출로 보완 |
+| eth_getLogs 블록 범위 제한 (프로바이더별 상이) | Medium | High | 10,000 블록 단위 청크 분할 + 병렬 조회 |
+| ETH 네이티브 전송 블록 스캔 성능 (NFR-1 영향) | Medium | Medium | last_synced_block 증분 동기화 + 병렬 블록 범위 조회 |
 | 회계 분개 매핑 규칙 정확성 (도메인 전문성 부족) | High | Medium | 기본 규칙 구현 후 회계사 피드백으로 반복 수정 |
 | Kotlin + Spring Boot + Next.js 모노레포 설정 복잡도 | Low | Medium | Gradle + npm 독립 빌드, Docker Compose로 통합 |
 
@@ -647,3 +656,6 @@ Task 1 (스캐폴딩)
   - [ ] CSV/Excel 내보내기 → 파일 열기 확인
 - [ ] 1,000건 트랜잭션 지갑으로 성능 테스트 (NFR-1)
 - [ ] 모든 금액의 차변 합 = 대변 합 (전체 원장 정합성)
+
+참고 의사결정 문서:
+- `reviews/rpc-ingestion-decision-2026-02-22.md` (RPC 수집 전략: Hybrid 우선, cutoff 기반 standard RPC 허용)

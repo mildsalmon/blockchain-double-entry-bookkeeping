@@ -48,14 +48,14 @@ class JournalApiIntegrationTest : IntegrationTestBase() {
                     "debitAmount" to 1500.0,
                     "creditAmount" to 0.0,
                     "tokenSymbol" to "ETH",
-                    "tokenQuantity" to 0.3
+                    "tokenQuantity" to 0.25
                 ),
                 mapOf(
                     "accountCode" to "수익:에어드롭",
                     "debitAmount" to 0.0,
                     "creditAmount" to 1500.0,
                     "tokenSymbol" to "ETH",
-                    "tokenQuantity" to 0.3
+                    "tokenQuantity" to 0.25
                 )
             )
         )
@@ -88,6 +88,38 @@ class JournalApiIntegrationTest : IntegrationTestBase() {
 
         val approved = journalRepository.findById(journalId)
         assertEquals(JournalStatus.APPROVED, approved?.status)
+    }
+
+    @Test
+    fun `rejects journal update when token quantity changes`() {
+        val journalId = seedJournalEntry(status = JournalStatus.REVIEW_REQUIRED)
+
+        val patchPayload = mapOf(
+            "memo" to "토큰 수량 변경 시도",
+            "lines" to listOf(
+                mapOf(
+                    "accountCode" to "자산:암호화폐:ETH",
+                    "debitAmount" to 1000.0,
+                    "creditAmount" to 0.0,
+                    "tokenSymbol" to "ETH",
+                    "tokenQuantity" to 0.3
+                ),
+                mapOf(
+                    "accountCode" to "수익:에어드롭",
+                    "debitAmount" to 0.0,
+                    "creditAmount" to 1000.0,
+                    "tokenSymbol" to "ETH",
+                    "tokenQuantity" to 0.3
+                )
+            )
+        )
+
+        mockMvc.patch("/api/journals/$journalId") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(patchPayload)
+        }.andExpect {
+            status { isBadRequest() }
+        }
     }
 
     private fun seedJournalEntry(status: JournalStatus): Long {

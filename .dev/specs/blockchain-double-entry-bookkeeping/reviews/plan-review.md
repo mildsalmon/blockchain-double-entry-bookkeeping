@@ -180,3 +180,26 @@ All previous CRs (CR-001 through CR-031) remain addressed. No regressions.
 - No architectural changes or task restructuring required
 
 The plan is ready for `/implement`. MEDIUM findings should be addressed during implementation as inline notes.
+
+---
+
+## Post-Implement Hardening (2026-02-23)
+
+Round 4 findings 중 즉시 반영 가능한 항목을 구현/테스트로 보강했다.
+
+### Applied
+
+- [x] CR-038 (Transaction ordering): `SyncPipelineUseCase`에서 raw tx 처리 순서 `(blockNumber, txIndex, txHash)` 정렬 고정
+- [x] CR-033 (Journal edit FIFO desync): `JournalEntry.update()`에 token 메타데이터(`tokenSymbol`, `tokenQuantity`) 불변식 추가
+- [x] CR-035 (Swap wallet filtering): `EthereumRpcAdapter`에서 지갑 토픽 포함 로그만 수집, 비연관 Swap 로그 과수집 방지
+- [x] CR-043 (Hexagonal violation): `TransactionDecoderPort` 도입, `SyncPipelineUseCase`가 adapter 구현이 아닌 port에 의존
+
+### Verification
+
+- [x] `backend ./gradlew test` 전체 통과
+- [x] `frontend npm run build` 통과
+- [x] 보강 회귀 테스트 추가/통과:
+  - `JournalEntryTest` (token metadata 변경 차단)
+  - `JournalApiIntegrationTest` (token quantity 변경 PATCH 400)
+  - `PipelineIntegrationTest` (역순 입력에서도 FIFO 손익 정합성)
+  - `EthereumRpcAdapterLogFilterTest` (지갑 비연관 Swap 로그 제외)

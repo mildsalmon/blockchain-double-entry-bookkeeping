@@ -34,6 +34,7 @@ data class JournalEntry(
 
     fun update(lines: List<JournalLine>, memo: String?): JournalEntry {
         validateEditable()
+        validateTokenMetadataImmutable(lines)
         return copy(
             lines = lines,
             memo = memo,
@@ -44,5 +45,23 @@ data class JournalEntry(
     fun approve(): JournalEntry {
         validateEditable()
         return copy(status = JournalStatus.APPROVED, updatedAt = Instant.now())
+    }
+
+    private fun validateTokenMetadataImmutable(updatedLines: List<JournalLine>) {
+        require(updatedLines.size == lines.size) {
+            "Line count cannot be changed for existing journal entries"
+        }
+        updatedLines.zip(lines).forEachIndexed { index, (updated, existing) ->
+            val sameTokenSymbol = updated.tokenSymbol == existing.tokenSymbol
+            val sameTokenQuantity = when {
+                updated.tokenQuantity == null && existing.tokenQuantity == null -> true
+                updated.tokenQuantity != null && existing.tokenQuantity != null ->
+                    updated.tokenQuantity.compareTo(existing.tokenQuantity) == 0
+                else -> false
+            }
+            require(sameTokenSymbol && sameTokenQuantity) {
+                "Token metadata is immutable on line $index. Re-run pipeline for quantity changes."
+            }
+        }
     }
 }
