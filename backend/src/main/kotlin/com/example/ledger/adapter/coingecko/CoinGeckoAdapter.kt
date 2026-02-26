@@ -1,11 +1,14 @@
 package com.example.ledger.adapter.coingecko
 
 import com.example.ledger.adapter.common.RateLimiter
+import com.example.ledger.adapter.common.RetryExecutor
 import com.example.ledger.domain.model.PriceInfo
 import com.example.ledger.domain.model.PriceSource
 import com.example.ledger.domain.port.PriceCacheRepository
 import com.example.ledger.domain.port.PricePort
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import org.springframework.web.reactive.function.client.WebClientResponseException
 import java.math.BigDecimal
 import java.time.LocalDate
 
@@ -14,8 +17,11 @@ class CoinGeckoAdapter(
     private val coinGeckoClient: CoinGeckoClient,
     private val tokenIdMapper: TokenIdMapper,
     private val priceCacheRepository: PriceCacheRepository,
-    private val coinGeckoRateLimiter: RateLimiter
+    private val coinGeckoRateLimiter: RateLimiter,
+    private val retryExecutor: RetryExecutor
 ) : PricePort {
+
+    private val logger = LoggerFactory.getLogger(CoinGeckoAdapter::class.java)
 
     override fun getPrice(tokenAddress: String?, tokenSymbol: String, date: LocalDate): PriceInfo {
         val cached = priceCacheRepository.find(tokenAddress, tokenSymbol, date)
@@ -50,7 +56,26 @@ class CoinGeckoAdapter(
 
         coinGeckoRateLimiter.acquire()
 
-        val prices = coinGeckoClient.fetchRangePrices(tokenId, fromDate, toDate)
+        val prices = try {
+            retryExecutor.execute {
+                coinGeckoClient.fetchRangePrices(tokenId, fromDate, toDate)
+            }
+        } catch (ex: WebClientResponseException) {
+            val status = ex.statusCode.value()
+            if (status in 400..499) {
+                logger.warn(
+                    "CoinGecko returned {}for tokenId={}, fromDate={}, toDate={}: returning empty prices",
+                    "$status ", tokenId, fromDate, toDate
+                )
+            } else {
+                logger.error(
+                    "CoinGecko returned {} for tokenId={}, fromDate={}, toDate={} after retries exhausted: degraded mode",
+                    status, tokenId, fromDate, toDate
+                )
+            }
+            return emptyMap()
+        }
+
         if (prices.isEmpty()) {
             return dates(fromDate, toDate).associateWith {
                 PriceInfo(
