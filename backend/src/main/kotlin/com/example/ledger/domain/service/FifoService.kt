@@ -1,8 +1,14 @@
 package com.example.ledger.domain.service
 
+import com.example.ledger.config.CannotSerializeTransactionException
 import com.example.ledger.config.SerializableTx
 import com.example.ledger.domain.model.CostBasisLot
 import com.example.ledger.domain.port.CostBasisLotRepository
+import org.slf4j.LoggerFactory
+import org.springframework.dao.CannotAcquireLockException
+import org.springframework.retry.annotation.Backoff
+import org.springframework.retry.annotation.Recover
+import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.MathContext
@@ -13,6 +19,8 @@ import java.time.Instant
 class FifoService(
     private val costBasisLotRepository: CostBasisLotRepository
 ) {
+    private val logger = LoggerFactory.getLogger(FifoService::class.java)
+
     data class ConsumptionResult(
         val totalCostKrw: BigDecimal,
         val missingQuantity: BigDecimal,
@@ -42,6 +50,11 @@ class FifoService(
     }
 
     @SerializableTx
+    @Retryable(
+        retryFor = [CannotSerializeTransactionException::class, CannotAcquireLockException::class],
+        maxAttempts = 5,
+        backoff = Backoff(delay = 50, multiplier = 2.0, maxDelay = 1000)
+    )
     fun consume(
         walletAddress: String,
         tokenSymbol: String,
@@ -75,5 +88,33 @@ class FifoService(
             missingQuantity = remaining.coerceAtLeast(BigDecimal.ZERO),
             consumedQuantity = quantity.subtract(remaining.coerceAtLeast(BigDecimal.ZERO))
         )
+    }
+
+    @Recover
+    fun recoverAfterSerializationFailure(
+        ex: CannotSerializeTransactionException,
+        walletAddress: String,
+        tokenSymbol: String,
+        quantity: BigDecimal
+    ): ConsumptionResult {
+        logger.error(
+            "FIFO consume retries exhausted due to serialization failures. walletAddress={}, tokenSymbol={}, quantity={}",
+            walletAddress, tokenSymbol, quantity, ex
+        )
+        throw ex
+    }
+
+    @Recover
+    fun recoverAfterLockFailure(
+        ex: CannotAcquireLockException,
+        walletAddress: String,
+        tokenSymbol: String,
+        quantity: BigDecimal
+    ): ConsumptionResult {
+        logger.error(
+            "FIFO consume retries exhausted due to lock failures. walletAddress={}, tokenSymbol={}, quantity={}",
+            walletAddress, tokenSymbol, quantity, ex
+        )
+        throw ex
     }
 }

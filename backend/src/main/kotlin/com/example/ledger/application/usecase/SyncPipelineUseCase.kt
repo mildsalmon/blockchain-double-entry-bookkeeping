@@ -12,6 +12,7 @@ import com.example.ledger.domain.port.TransactionDecoderPort
 import com.example.ledger.domain.port.WalletRepository
 import com.example.ledger.domain.service.ClassificationService
 import com.example.ledger.domain.service.LedgerService
+import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -28,6 +29,7 @@ class SyncPipelineUseCase(
     private val pricePort: PricePort,
     private val ledgerService: LedgerService
 ) {
+    private val logger = LoggerFactory.getLogger(SyncPipelineUseCase::class.java)
 
     @Async
     fun syncAsync(walletAddress: String) {
@@ -38,8 +40,10 @@ class SyncPipelineUseCase(
         val wallet = walletRepository.findByAddress(walletAddress)
             ?: throw IllegalArgumentException("Wallet not found: $walletAddress")
 
-        val syncingWallet = wallet.copy(syncStatus = SyncStatus.SYNCING, updatedAt = Instant.now())
-        walletRepository.save(syncingWallet)
+        if (!walletRepository.trySetSyncing(walletAddress)) {
+            logger.info("Wallet is already syncing. walletAddress={}", walletAddress)
+            return
+        }
 
         try {
             val rawTransactions = blockchainDataPort.fetchTransactions(walletAddress, wallet.lastSyncedBlock)
