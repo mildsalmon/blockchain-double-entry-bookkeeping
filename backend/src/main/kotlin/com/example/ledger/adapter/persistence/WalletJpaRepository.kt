@@ -20,4 +20,8 @@ class WalletJpaRepository(
     override fun findAll(): List<Wallet> {
         return springDataWalletRepository.findAll().map { it.toDomain() }
     }
+
+    override fun trySetSyncing(address: String): Boolean {
+        return springDataWalletRepository.setStatusSyncingIfNotAlready(address) > 0
+    }
 }

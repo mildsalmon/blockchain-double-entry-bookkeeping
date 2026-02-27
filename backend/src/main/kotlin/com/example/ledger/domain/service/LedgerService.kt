@@ -1,7 +1,7 @@
 package com.example.ledger.domain.service
 
+import com.example.ledger.config.CannotSerializeTransactionException
 import com.example.ledger.config.SerializableTx
-import com.example.ledger.domain.model.Account
 import com.example.ledger.domain.model.AccountCategory
 import com.example.ledger.domain.model.AccountingEvent
 import com.example.ledger.domain.model.EventType
@@ -11,6 +11,11 @@ import com.example.ledger.domain.model.JournalStatus
 import com.example.ledger.domain.model.PriceSource
 import com.example.ledger.domain.port.AccountRepository
 import com.example.ledger.domain.port.JournalRepository
+import org.slf4j.LoggerFactory
+import org.springframework.dao.CannotAcquireLockException
+import org.springframework.retry.annotation.Backoff
+import org.springframework.retry.annotation.Recover
+import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.MathContext
@@ -36,6 +41,13 @@ class LedgerService(
         private const val UNSPECIFIED_INCOME_ACCOUNT = "수익:미지정수입"
     }
 
+    private val logger = LoggerFactory.getLogger(LedgerService::class.java)
+
+    @Retryable(
+        retryFor = [CannotSerializeTransactionException::class, CannotAcquireLockException::class],
+        maxAttempts = 5,
+        backoff = Backoff(delay = 50, multiplier = 2.0, maxDelay = 1000)
+    )
     @SerializableTx
     fun generateEntries(
         walletAddress: String,
@@ -58,6 +70,36 @@ class LedgerService(
             )
             saved
         }
+    }
+
+    @Recover
+    fun recoverAfterSerializationFailure(
+        ex: CannotSerializeTransactionException,
+        walletAddress: String,
+        rawTransactionId: Long,
+        events: List<AccountingEvent>,
+        entryDate: Instant
+    ): List<JournalEntry> {
+        logger.error(
+            "Ledger entry generation retries exhausted due to serialization failures. walletAddress={}, rawTransactionId={}, eventCount={}, entryDate={}",
+            walletAddress, rawTransactionId, events.size, entryDate, ex
+        )
+        throw ex
+    }
+
+    @Recover
+    fun recoverAfterLockFailure(
+        ex: CannotAcquireLockException,
+        walletAddress: String,
+        rawTransactionId: Long,
+        events: List<AccountingEvent>,
+        entryDate: Instant
+    ): List<JournalEntry> {
+        logger.error(
+            "Ledger entry generation retries exhausted due to lock failures. walletAddress={}, rawTransactionId={}, eventCount={}, entryDate={}",
+            walletAddress, rawTransactionId, events.size, entryDate, ex
+        )
+        throw ex
     }
 
     fun updateEntry(id: Long, lines: List<JournalLine>, memo: String?): JournalEntry {
@@ -277,17 +319,9 @@ class LedgerService(
     }
 
     private fun ensureAccountExists(code: String, name: String, category: AccountCategory, system: Boolean) {
-        val existing = accountRepository.findByCode(code)
-        if (existing == null) {
-            accountRepository.save(
-                Account(
-                    code = code,
-                    name = name,
-                    category = category,
-                    system = system
-                )
-            )
-        }
+        accountRepository.insertIfAbsent(code, name, category, system)
+        accountRepository.findByCode(code)
+            ?: throw IllegalStateException("Account upsert failed for code=$code")
     }
 
     private fun line(

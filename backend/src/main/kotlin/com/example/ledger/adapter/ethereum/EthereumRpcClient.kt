@@ -52,8 +52,7 @@ class EthereumRpcClient(
             object : TypeReference<RpcResponse<BlockResponse>>() {}
         )
         response.error?.let {
-            log.warn("eth_getBlockByNumber RPC error {}: {}", it.code, it.message)
-            return null
+            throw EthereumRpcException(it.code, it.message)
         }
         return response.result
     }
@@ -67,8 +66,7 @@ class EthereumRpcClient(
             object : TypeReference<RpcResponse<TransactionReceiptResponse>>() {}
         )
         response.error?.let {
-            log.warn("eth_getTransactionReceipt RPC error {}: {}", it.code, it.message)
-            return null
+            throw EthereumRpcException(it.code, it.message)
         }
         return response.result
     }
@@ -82,8 +80,7 @@ class EthereumRpcClient(
             object : TypeReference<RpcResponse<TransactionResponse>>() {}
         )
         response.error?.let {
-            log.warn("eth_getTransactionByHash RPC error {}: {}", it.code, it.message)
-            return null
+            throw EthereumRpcException(it.code, it.message)
         }
         return response.result
     }
@@ -97,10 +94,10 @@ class EthereumRpcClient(
             object : TypeReference<RpcResponse<String>>() {}
         )
         response.error?.let {
-            log.warn("eth_blockNumber RPC error {}: {}", it.code, it.message)
-            return 0L
+            throw EthereumRpcException(it.code, it.message)
         }
-        return response.result?.hexToLong() ?: 0L
+        return response.result?.hexToLong()
+            ?: throw EthereumRpcException(-1, "eth_blockNumber returned null result")
     }
 
     private fun buildRequest(method: String, params: List<Any?>): Map<String, Any?> = mapOf(

@@ -237,7 +237,7 @@ TODO-Final (Verification)
 
 ## TODOs
 
-### [ ] TODO 1: Fix EthereumRpcClient silent failure — propagate RPC errors as exceptions
+### [x] TODO 1: Fix EthereumRpcClient silent failure — propagate RPC errors as exceptions
 
 **Type**: work
 
@@ -308,7 +308,7 @@ risk: MEDIUM
 
 ---
 
-### [ ] TODO 2: Prevent concurrent wallet sync with DB-level guard
+### [x] TODO 2: Prevent concurrent wallet sync with DB-level guard
 
 **Type**: work
 
@@ -376,7 +376,7 @@ risk: HIGH
 
 ---
 
-### [ ] TODO 3: Handle concurrent wallet registration race condition
+### [x] TODO 3: Handle concurrent wallet registration race condition
 
 **Type**: work
 
@@ -432,7 +432,7 @@ risk: MEDIUM
 
 ---
 
-### [ ] TODO 4: Add serialization retry and account upsert for concurrency safety
+### [x] TODO 4: Add serialization retry and account upsert for concurrency safety
 
 **Type**: work
 
@@ -513,7 +513,7 @@ risk: MEDIUM
 
 ---
 
-### [ ] TODO 5: Add retry and error classification to CoinGecko adapter
+### [x] TODO 5: Add retry and error classification to CoinGecko adapter
 
 **Type**: work
 
@@ -577,7 +577,7 @@ risk: LOW
 
 ---
 
-### [ ] TODO 6: Expand API exception handler for comprehensive error responses
+### [x] TODO 6: Expand API exception handler for comprehensive error responses
 
 **Type**: work
 
@@ -637,7 +637,7 @@ risk: LOW
 
 ---
 
-### [ ] TODO 7: Add failure scenario integration tests
+### [x] TODO 7: Add failure scenario integration tests
 
 **Type**: work
 
@@ -707,7 +707,7 @@ risk: LOW
 
 ---
 
-### [ ] TODO Final: Verification
+### [x] TODO Final: Verification
 
 **Type**: verification
 
