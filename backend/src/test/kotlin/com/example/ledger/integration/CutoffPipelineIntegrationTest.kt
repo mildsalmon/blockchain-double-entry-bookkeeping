@@ -4,6 +4,7 @@ import com.example.ledger.application.usecase.SyncPipelineUseCase
 import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.model.SyncStatus
 import com.example.ledger.domain.model.Wallet
+import com.example.ledger.domain.model.WalletBalanceSnapshot
 import com.example.ledger.domain.model.WalletSyncMode
 import com.example.ledger.domain.model.WalletSyncPhase
 import com.example.ledger.domain.port.AccountingEventRepository
@@ -11,6 +12,7 @@ import com.example.ledger.domain.port.BlockchainDataPort
 import com.example.ledger.domain.port.JournalRepository
 import com.example.ledger.domain.port.PricePort
 import com.example.ledger.domain.port.RawTransactionRepository
+import com.example.ledger.domain.port.WalletBalanceSnapshotRepository
 import com.example.ledger.domain.port.WalletRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Test
@@ -39,6 +41,9 @@ class CutoffPipelineIntegrationTest : IntegrationTestBase() {
 
     @Autowired
     private lateinit var journalRepository: JournalRepository
+
+    @Autowired
+    private lateinit var walletBalanceSnapshotRepository: WalletBalanceSnapshotRepository
 
     @Autowired
     private lateinit var syncPipelineUseCase: SyncPipelineUseCase
@@ -105,6 +110,45 @@ class CutoffPipelineIntegrationTest : IntegrationTestBase() {
         verify(blockchainDataPort).fetchTransactions(eq(walletAddress), eq(101L))
         verify(blockchainDataPort).fetchTransactions(eq(walletAddress), eq(102L))
         verifyNoInteractions(pricePort)
+    }
+
+    @Test
+    fun `cutoff pipeline backfills opening journal for legacy snapped wallet`() {
+        val walletAddress = "0x4444444444444444444444444444444444444444"
+        val cutoffBlock = 200L
+        val wallet = walletRepository.save(
+            Wallet(
+                address = walletAddress,
+                syncMode = WalletSyncMode.BALANCE_FLOW_CUTOFF,
+                syncPhase = WalletSyncPhase.SNAPSHOT_COMPLETED,
+                syncStatus = SyncStatus.PENDING,
+                cutoffBlock = cutoffBlock,
+                snapshotBlock = cutoffBlock,
+                deltaSyncedBlock = cutoffBlock,
+                lastSyncedBlock = cutoffBlock
+            )
+        )
+
+        walletBalanceSnapshotRepository.saveAll(
+            listOf(
+                WalletBalanceSnapshot(
+                    walletId = requireNotNull(wallet.id),
+                    tokenAddress = "0x0000000000000000000000000000000000000000",
+                    tokenSymbol = "ETH",
+                    balanceRaw = java.math.BigInteger("1000000000000000000"),
+                    cutoffBlock = cutoffBlock
+                )
+            )
+        )
+
+        whenever(blockchainDataPort.fetchTransactions(eq(walletAddress), eq(201L))).thenReturn(emptyList())
+
+        syncPipelineUseCase.sync(walletAddress)
+        syncPipelineUseCase.sync(walletAddress)
+
+        val journals = journalRepository.findByFilters(size = 100)
+        assertEquals(1, journals.size)
+        assertTrue(journals.single().description.startsWith("Cutoff opening balance"))
     }
 
     private fun rawTransfer(

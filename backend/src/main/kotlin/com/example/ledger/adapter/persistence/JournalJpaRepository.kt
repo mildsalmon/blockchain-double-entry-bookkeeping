@@ -25,6 +25,10 @@ class JournalJpaRepository(
         return springDataJournalEntryRepository.saveAll(entries.map { it.toEntity() }).map { it.toDomain() }
     }
 
+    override fun existsByRawTransactionId(rawTransactionId: Long): Boolean {
+        return springDataJournalEntryRepository.existsByRawTransactionId(rawTransactionId)
+    }
+
     override fun findById(id: Long): JournalEntry? {
         return springDataJournalEntryRepository.findById(id).orElse(null)?.toDomain()
     }

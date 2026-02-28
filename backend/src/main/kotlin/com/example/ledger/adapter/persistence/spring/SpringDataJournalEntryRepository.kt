@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 
 interface SpringDataJournalEntryRepository : JpaRepository<JournalEntryEntity, Long> {
+    fun existsByRawTransactionId(rawTransactionId: Long): Boolean
 
     @Query(
         """

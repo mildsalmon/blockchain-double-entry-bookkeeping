@@ -9,9 +9,11 @@ import com.example.ledger.domain.model.WalletSyncMode
 import com.example.ledger.domain.model.WalletSyncPhase
 import com.example.ledger.domain.port.AccountingEventRepository
 import com.example.ledger.domain.port.BlockchainDataPort
+import com.example.ledger.domain.port.JournalRepository
 import com.example.ledger.domain.port.PricePort
 import com.example.ledger.domain.port.RawTransactionRepository
 import com.example.ledger.domain.port.TransactionDecoderPort
+import com.example.ledger.domain.port.WalletBalanceSnapshotRepository
 import com.example.ledger.domain.port.WalletRepository
 import com.example.ledger.domain.service.ClassificationService
 import com.example.ledger.domain.service.LedgerService
@@ -32,6 +34,8 @@ class SyncPipelineUseCase(
     private val transactionDecoder: TransactionDecoderPort,
     private val classificationService: ClassificationService,
     private val accountingEventRepository: AccountingEventRepository,
+    private val walletBalanceSnapshotRepository: WalletBalanceSnapshotRepository,
+    private val journalRepository: JournalRepository,
     private val pricePort: PricePort,
     private val ledgerService: LedgerService,
     private val cutoffSnapshotService: CutoffSnapshotService
@@ -127,18 +131,9 @@ class SyncPipelineUseCase(
 
             if (currentWallet.snapshotBlock == null) {
                 val snapshots = cutoffSnapshotService.collect(currentWallet)
+                ensureCutoffOpeningEntries(currentWallet, snapshots)
                 val cutoffBlock = currentWallet.cutoffBlock
                     ?: throw IllegalArgumentException("cutoffBlock is required for BALANCE_FLOW_CUTOFF mode")
-                val snapshotRawTransaction = getOrCreateCutoffSnapshotRawTransaction(currentWallet.address, cutoffBlock)
-                val snapshotRawTransactionId = snapshotRawTransaction.id
-                    ?: throw IllegalStateException("Synthetic cutoff snapshot raw transaction must have id")
-
-                ledgerService.generateBalanceFlowOpeningEntries(
-                    rawTransactionId = snapshotRawTransactionId,
-                    snapshots = snapshots,
-                    entryDate = Instant.now()
-                )
-
                 currentWallet = walletRepository.save(
                     currentWallet.copy(
                         syncPhase = WalletSyncPhase.SNAPSHOT_COMPLETED,
@@ -148,6 +143,8 @@ class SyncPipelineUseCase(
                         updatedAt = Instant.now()
                     )
                 )
+            } else {
+                ensureCutoffOpeningEntries(currentWallet)
             }
 
             val baseBlock = currentWallet.deltaSyncedBlock
@@ -211,6 +208,29 @@ class SyncPipelineUseCase(
         return event.copy(
             priceKrw = priceInfo.priceKrw,
             priceSource = priceInfo.source.takeIf { it != PriceSource.UNKNOWN } ?: PriceSource.UNKNOWN
+        )
+    }
+
+    private fun ensureCutoffOpeningEntries(wallet: Wallet, snapshotsOverride: List<com.example.ledger.domain.model.WalletBalanceSnapshot>? = null) {
+        val walletId = wallet.id ?: return
+        val cutoffBlock = wallet.snapshotBlock ?: wallet.cutoffBlock ?: return
+        val snapshots = snapshotsOverride ?: walletBalanceSnapshotRepository.findByWalletId(walletId)
+        if (snapshots.isEmpty()) {
+            return
+        }
+
+        val snapshotRawTransaction = getOrCreateCutoffSnapshotRawTransaction(wallet.address, cutoffBlock)
+        val snapshotRawTransactionId = snapshotRawTransaction.id
+            ?: throw IllegalStateException("Synthetic cutoff snapshot raw transaction must have id")
+
+        if (journalRepository.existsByRawTransactionId(snapshotRawTransactionId)) {
+            return
+        }
+
+        ledgerService.generateBalanceFlowOpeningEntries(
+            rawTransactionId = snapshotRawTransactionId,
+            snapshots = snapshots,
+            entryDate = Instant.now()
         )
     }
 
