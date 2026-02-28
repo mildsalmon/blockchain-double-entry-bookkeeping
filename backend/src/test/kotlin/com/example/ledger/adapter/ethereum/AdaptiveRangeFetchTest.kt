@@ -38,4 +38,32 @@ class AdaptiveRangeFetchTest {
             )
         }
     }
+
+    @Test
+    fun `splits block range when provider returns query exceeds max results error`() {
+        val calls = mutableListOf<Pair<Long, Long>>()
+
+        val result = fetchWithAdaptiveRange(
+            fromBlock = 24554836L,
+            toBlock = 24555144L,
+            fetch = { from, to ->
+                calls += Pair(from, to)
+                if (from == 24554836L && to == 24555144L) {
+                    throw EthereumRpcException(-32602, "query exceeds max results 20000, retry with the range 24554836-24554871")
+                }
+                listOf("$from-$to")
+            },
+            shouldSplit = { it is EthereumRpcException && isTooManyResultsError(it) }
+        )
+
+        assertEquals(
+            listOf(
+                24554836L to 24555144L,
+                24554836L to 24554990L,
+                24554991L to 24555144L
+            ),
+            calls
+        )
+        assertEquals(listOf("24554836-24554990", "24554991-24555144"), result)
+    }
 }

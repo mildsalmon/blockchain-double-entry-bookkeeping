@@ -236,9 +236,12 @@ internal fun isTooManyResultsError(error: EthereumRpcException): Boolean {
     val message = error.rpcMessage.lowercase()
     return error.code == -32005
         || error.code == -32016
+        || error.code == -32602
         || message.contains("too many results")
         || message.contains("result set too large")
         || message.contains("query returned more than")
+        || message.contains("query exceeds max results")
+        || message.contains("retry with the range")
 }
 
 internal fun <T> fetchWithAdaptiveRange(

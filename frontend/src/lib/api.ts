@@ -31,6 +31,20 @@ export const api = {
     }),
   listWallets: () => request<Wallet[]>('/api/wallets'),
   getWalletStatus: (address: string) => request<Wallet>(`/api/wallets/${address}/status`),
+  retryWallet: (address: string) =>
+    request<Wallet>(`/api/wallets/${address}/retry`, {
+      method: 'POST'
+    }),
+  deleteWallet: async (address: string) => {
+    const response = await fetch(`/api/wallets/${address}`, {
+      method: 'DELETE',
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(body || `Request failed: ${response.status}`);
+    }
+  },
 
   listJournals: (params: Record<string, string | number | undefined>) => {
     const query = new URLSearchParams();
