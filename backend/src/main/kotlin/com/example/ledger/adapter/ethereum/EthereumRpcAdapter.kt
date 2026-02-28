@@ -247,6 +247,9 @@ internal fun isTooManyResultsError(error: EthereumRpcException): Boolean {
 }
 
 internal fun shouldSplitLogRangeError(error: Throwable): Boolean {
+    if (hasMessageInCause(error, "unexpected end-of-input")) {
+        return true
+    }
     if (error is DataBufferLimitException || hasCause<DataBufferLimitException>(error)) {
         return true
     }
@@ -264,6 +267,18 @@ private inline fun <reified T : Throwable> hasCause(error: Throwable): Boolean {
     var current: Throwable? = error
     while (current != null) {
         if (current is T) {
+            return true
+        }
+        current = current.cause
+    }
+    return false
+}
+
+private fun hasMessageInCause(error: Throwable, messageFragment: String): Boolean {
+    var current: Throwable? = error
+    while (current != null) {
+        val message = current.message
+        if (message != null && message.contains(messageFragment, ignoreCase = true)) {
             return true
         }
         current = current.cause

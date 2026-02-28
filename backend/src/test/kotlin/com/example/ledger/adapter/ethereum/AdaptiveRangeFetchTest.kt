@@ -1,5 +1,6 @@
 package com.example.ledger.adapter.ethereum
 
+import com.fasterxml.jackson.databind.JsonMappingException
 import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.http.HttpHeaders
 import org.springframework.web.reactive.function.client.WebClientResponseException
@@ -120,5 +121,30 @@ class AdaptiveRangeFetchTest {
 
         assertEquals(listOf(20L to 29L, 20L to 24L, 25L to 29L), calls)
         assertEquals(listOf("20-24", "25-29"), result)
+    }
+
+    @Test
+    fun `splits block range when provider returns truncated json`() {
+        val calls = mutableListOf<Pair<Long, Long>>()
+
+        val result = fetchWithAdaptiveRange(
+            fromBlock = 30L,
+            toBlock = 39L,
+            fetch = { from, to ->
+                calls += Pair(from, to)
+                if (from == 30L && to == 39L) {
+                    val truncatedJsonError = JsonMappingException.from(
+                        null as com.fasterxml.jackson.core.JsonParser?,
+                        "Unexpected end-of-input in field name"
+                    )
+                    throw RuntimeException("wrapped parser error", truncatedJsonError)
+                }
+                listOf("$from-$to")
+            },
+            shouldSplit = { shouldSplitLogRangeError(it) }
+        )
+
+        assertEquals(listOf(30L to 39L, 30L to 34L, 35L to 39L), calls)
+        assertEquals(listOf("30-34", "35-39"), result)
     }
 }
