@@ -1,9 +1,12 @@
 package com.example.ledger.application.usecase
 
 import com.example.ledger.domain.model.AccountingEvent
-import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.model.PriceSource
+import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.model.SyncStatus
+import com.example.ledger.domain.model.Wallet
+import com.example.ledger.domain.model.WalletSyncMode
+import com.example.ledger.domain.model.WalletSyncPhase
 import com.example.ledger.domain.port.AccountingEventRepository
 import com.example.ledger.domain.port.BlockchainDataPort
 import com.example.ledger.domain.port.PricePort
@@ -26,7 +29,8 @@ class SyncPipelineUseCase(
     private val classificationService: ClassificationService,
     private val accountingEventRepository: AccountingEventRepository,
     private val pricePort: PricePort,
-    private val ledgerService: LedgerService
+    private val ledgerService: LedgerService,
+    private val cutoffSnapshotService: CutoffSnapshotService
 ) {
 
     @Async
@@ -38,18 +42,21 @@ class SyncPipelineUseCase(
         val wallet = walletRepository.findByAddress(walletAddress)
             ?: throw IllegalArgumentException("Wallet not found: $walletAddress")
 
-        val syncingWallet = wallet.copy(syncStatus = SyncStatus.SYNCING, updatedAt = Instant.now())
-        walletRepository.save(syncingWallet)
+        if (wallet.syncMode == WalletSyncMode.BALANCE_FLOW_CUTOFF) {
+            syncCutoffMode(wallet)
+            return
+        }
+
+        syncFullMode(wallet)
+    }
+
+    private fun syncFullMode(wallet: Wallet) {
+        val walletAddress = wallet.address
+        walletRepository.save(wallet.copy(syncStatus = SyncStatus.SYNCING, updatedAt = Instant.now()))
 
         try {
             val rawTransactions = blockchainDataPort.fetchTransactions(walletAddress, wallet.lastSyncedBlock)
-            val savedRawTransactions = rawTransactionRepository.saveAll(rawTransactions)
-                .sortedWith(
-                    compareBy<RawTransaction> { it.blockNumber }
-                        .thenBy { it.txIndex ?: Int.MAX_VALUE }
-                        .thenBy { it.txHash }
-                )
-
+            val savedRawTransactions = persistAndSort(rawTransactions)
             var maxBlock = wallet.lastSyncedBlock ?: 0L
 
             savedRawTransactions.forEach { rawTx ->
@@ -79,9 +86,94 @@ class SyncPipelineUseCase(
                 )
             )
         } catch (ex: Exception) {
-            walletRepository.save(wallet.copy(syncStatus = SyncStatus.FAILED, updatedAt = Instant.now()))
+            val latestWallet = walletRepository.findByAddress(walletAddress) ?: wallet
+            walletRepository.save(latestWallet.copy(syncStatus = SyncStatus.FAILED, updatedAt = Instant.now()))
             throw ex
         }
+    }
+
+    private fun syncCutoffMode(wallet: Wallet) {
+        val walletAddress = wallet.address
+        val initialPhase = if (wallet.snapshotBlock == null) {
+            WalletSyncPhase.SNAPSHOTTING
+        } else {
+            WalletSyncPhase.DELTA_SYNCING
+        }
+        walletRepository.save(
+            wallet.copy(
+                syncStatus = SyncStatus.SYNCING,
+                syncPhase = initialPhase,
+                updatedAt = Instant.now()
+            )
+        )
+
+        try {
+            var currentWallet = walletRepository.findByAddress(walletAddress)
+                ?: throw IllegalArgumentException("Wallet not found: $walletAddress")
+
+            if (currentWallet.snapshotBlock == null) {
+                cutoffSnapshotService.collect(currentWallet)
+                val cutoffBlock = currentWallet.cutoffBlock
+                    ?: throw IllegalArgumentException("cutoffBlock is required for BALANCE_FLOW_CUTOFF mode")
+                currentWallet = walletRepository.save(
+                    currentWallet.copy(
+                        syncPhase = WalletSyncPhase.SNAPSHOT_COMPLETED,
+                        snapshotBlock = cutoffBlock,
+                        deltaSyncedBlock = cutoffBlock,
+                        lastSyncedBlock = cutoffBlock,
+                        updatedAt = Instant.now()
+                    )
+                )
+            }
+
+            val baseBlock = currentWallet.deltaSyncedBlock
+                ?: currentWallet.cutoffBlock
+                ?: throw IllegalArgumentException("cutoffBlock is required for BALANCE_FLOW_CUTOFF mode")
+            val deltaFromBlock = baseBlock + 1
+            val rawTransactions = blockchainDataPort.fetchTransactions(walletAddress, deltaFromBlock)
+            val savedRawTransactions = persistAndSort(rawTransactions)
+
+            var maxBlock = baseBlock
+            savedRawTransactions.forEach { rawTx ->
+                if (rawTx.blockNumber > maxBlock) {
+                    maxBlock = rawTx.blockNumber
+                }
+
+                val decoded = transactionDecoder.decode(rawTx)
+                val classified = classificationService.classify(decoded)
+                accountingEventRepository.saveAll(classified)
+            }
+
+            walletRepository.save(
+                currentWallet.copy(
+                    syncStatus = SyncStatus.COMPLETED,
+                    syncPhase = WalletSyncPhase.DELTA_COMPLETED,
+                    lastSyncedAt = Instant.now(),
+                    deltaSyncedBlock = maxBlock,
+                    lastSyncedBlock = maxBlock,
+                    updatedAt = Instant.now()
+                )
+            )
+        } catch (ex: Exception) {
+            val latestWallet = walletRepository.findByAddress(walletAddress) ?: wallet
+            walletRepository.save(
+                latestWallet.copy(
+                    syncStatus = SyncStatus.FAILED,
+                    syncPhase = WalletSyncPhase.FAILED,
+                    updatedAt = Instant.now()
+                )
+            )
+            throw ex
+        }
+    }
+
+    private fun persistAndSort(rawTransactions: List<RawTransaction>): List<RawTransaction> {
+        return rawTransactionRepository.saveAll(rawTransactions)
+            .sortedWith(
+                compareBy<RawTransaction> { it.blockNumber }
+                    .thenBy { it.txIndex ?: Int.MAX_VALUE }
+                    .thenBy { it.txHash }
+            )
     }
 
     private fun enrichPrice(event: AccountingEvent, blockTimestamp: Instant): AccountingEvent {

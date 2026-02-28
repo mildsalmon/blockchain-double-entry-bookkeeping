@@ -1,6 +1,8 @@
 package com.example.ledger.adapter.persistence.entity
 
 import com.example.ledger.domain.model.SyncStatus
+import com.example.ledger.domain.model.WalletSyncMode
+import com.example.ledger.domain.model.WalletSyncPhase
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
@@ -19,8 +21,18 @@ data class WalletEntity(
     val address: String,
     @Column(name = "label")
     val label: String? = null,
+    @Column(name = "sync_mode", nullable = false)
+    val syncMode: String = WalletSyncMode.FULL.name,
+    @Column(name = "sync_phase", nullable = false)
+    val syncPhase: String = WalletSyncPhase.NONE.name,
     @Column(name = "sync_status", nullable = false)
     val syncStatus: String = SyncStatus.PENDING.name,
+    @Column(name = "cutoff_block")
+    val cutoffBlock: Long? = null,
+    @Column(name = "snapshot_block")
+    val snapshotBlock: Long? = null,
+    @Column(name = "delta_synced_block")
+    val deltaSyncedBlock: Long? = null,
     @Column(name = "last_synced_at")
     val lastSyncedAt: Instant? = null,
     @Column(name = "last_synced_block")

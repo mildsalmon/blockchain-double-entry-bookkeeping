@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { SyncStatus } from '@/components/SyncStatus';
 import { WalletInput } from '@/components/WalletInput';
-import type { Wallet } from '@/types/wallet';
+import type { Wallet, WalletCreatePayload } from '@/types/wallet';
 
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -22,8 +22,8 @@ export default function WalletsPage() {
     return () => clearInterval(timer);
   }, []);
 
-  async function handleCreate(address: string, startBlock?: number) {
-    await api.createWallet(address, undefined, startBlock);
+  async function handleCreate(payload: WalletCreatePayload) {
+    await api.createWallet(payload);
     await loadWallets();
   }
 

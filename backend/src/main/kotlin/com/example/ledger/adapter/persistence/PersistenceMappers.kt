@@ -5,6 +5,7 @@ import com.example.ledger.adapter.persistence.entity.AccountingEventEntity
 import com.example.ledger.adapter.persistence.entity.CostBasisLotEntity
 import com.example.ledger.adapter.persistence.entity.PriceCacheEntity
 import com.example.ledger.adapter.persistence.entity.RawTransactionEntity
+import com.example.ledger.adapter.persistence.entity.WalletBalanceSnapshotEntity
 import com.example.ledger.adapter.persistence.entity.WalletEntity
 import com.example.ledger.domain.model.Account
 import com.example.ledger.domain.model.AccountCategory
@@ -15,7 +16,10 @@ import com.example.ledger.domain.model.PriceInfo
 import com.example.ledger.domain.model.PriceSource
 import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.model.SyncStatus
+import com.example.ledger.domain.model.WalletBalanceSnapshot
 import com.example.ledger.domain.model.Wallet
+import com.example.ledger.domain.model.WalletSyncMode
+import com.example.ledger.domain.model.WalletSyncPhase
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -24,7 +28,12 @@ internal fun WalletEntity.toDomain(): Wallet = Wallet(
     id = id,
     address = address,
     label = label,
+    syncMode = WalletSyncMode.valueOf(syncMode),
+    syncPhase = WalletSyncPhase.valueOf(syncPhase),
     syncStatus = SyncStatus.valueOf(syncStatus),
+    cutoffBlock = cutoffBlock,
+    snapshotBlock = snapshotBlock,
+    deltaSyncedBlock = deltaSyncedBlock,
     lastSyncedAt = lastSyncedAt,
     lastSyncedBlock = lastSyncedBlock,
     createdAt = createdAt,
@@ -35,7 +44,12 @@ internal fun Wallet.toEntity(): WalletEntity = WalletEntity(
     id = id,
     address = address,
     label = label,
+    syncMode = syncMode.name,
+    syncPhase = syncPhase.name,
     syncStatus = syncStatus.name,
+    cutoffBlock = cutoffBlock,
+    snapshotBlock = snapshotBlock,
+    deltaSyncedBlock = deltaSyncedBlock,
     lastSyncedAt = lastSyncedAt,
     lastSyncedBlock = lastSyncedBlock,
     createdAt = createdAt,
@@ -163,4 +177,26 @@ internal fun PriceInfo.toEntity(): PriceCacheEntity = PriceCacheEntity(
     priceDate = date,
     priceKrw = priceKrw.setScale(8, RoundingMode.HALF_UP),
     source = source.name
+)
+
+internal fun WalletBalanceSnapshotEntity.toDomain(): WalletBalanceSnapshot = WalletBalanceSnapshot(
+    id = id,
+    walletId = walletId,
+    tokenAddress = tokenAddress,
+    tokenSymbol = tokenSymbol,
+    balanceRaw = balanceRaw.toBigInteger(),
+    cutoffBlock = cutoffBlock,
+    createdAt = createdAt,
+    updatedAt = updatedAt
+)
+
+internal fun WalletBalanceSnapshot.toEntity(): WalletBalanceSnapshotEntity = WalletBalanceSnapshotEntity(
+    id = id,
+    walletId = walletId,
+    tokenAddress = tokenAddress,
+    tokenSymbol = tokenSymbol,
+    balanceRaw = balanceRaw.toBigDecimal(),
+    cutoffBlock = cutoffBlock,
+    createdAt = createdAt,
+    updatedAt = updatedAt
 )

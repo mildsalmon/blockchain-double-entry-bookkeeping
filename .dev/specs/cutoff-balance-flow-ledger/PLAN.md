@@ -219,7 +219,7 @@ TODO-Final (verification)
 
 ## TODOs
 
-### [ ] TODO 1: Add Cutoff Snapshot Data Model and Schema
+### [x] TODO 1: Add Cutoff Snapshot Data Model and Schema
 
 **Type**: work
 
@@ -264,7 +264,7 @@ TODO-Final (verification)
 
 ---
 
-### [ ] TODO 2: Implement Snapshot Collection at Cutoff
+### [x] TODO 2: Implement Snapshot Collection at Cutoff
 
 **Type**: work
 
@@ -306,7 +306,7 @@ TODO-Final (verification)
 
 ---
 
-### [ ] TODO 3: Add Dedicated Cutoff Delta Pipeline Mode
+### [x] TODO 3: Add Dedicated Cutoff Delta Pipeline Mode
 
 **Type**: work
 
@@ -349,7 +349,7 @@ TODO-Final (verification)
 
 ---
 
-### [ ] TODO 4: Extend Backend API Contracts for Cutoff Mode and Sync Phase
+### [x] TODO 4: Extend Backend API Contracts for Cutoff Mode and Sync Phase
 
 **Type**: work
 
@@ -396,7 +396,7 @@ TODO-Final (verification)
 
 ---
 
-### [ ] TODO 5: Update Frontend Wallet UX for Cutoff and Sync Phases
+### [x] TODO 5: Update Frontend Wallet UX for Cutoff and Sync Phases
 
 **Type**: work
 
@@ -441,7 +441,7 @@ TODO-Final (verification)
 
 ---
 
-### [ ] TODO 6: Add Cutoff Boundary and Regression Test Suite
+### [x] TODO 6: Add Cutoff Boundary and Regression Test Suite
 
 **Type**: work
 
@@ -489,7 +489,7 @@ TODO-Final (verification)
 
 ---
 
-### [ ] TODO Final: Verification
+### [x] TODO Final: Verification
 
 **Type**: verification
 

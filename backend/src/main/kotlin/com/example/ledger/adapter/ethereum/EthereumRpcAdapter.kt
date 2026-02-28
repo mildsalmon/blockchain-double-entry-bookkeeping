@@ -10,6 +10,7 @@ import com.example.ledger.domain.port.BlockchainDataPort
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.math.BigInteger
 import java.time.Instant
 
 private const val BLOCK_CHUNK_SIZE = 10_000L
@@ -48,6 +49,14 @@ class EthereumRpcAdapter(
         log.info("Collected {} unique tx hashes for {}", collectedTxHashes.size, walletAddress)
 
         return buildRawTransactions(walletAddress, collectedTxHashes, blockTimestampCache, txCache)
+    }
+
+    override fun getNativeBalanceAtBlock(walletAddress: String, blockNumber: Long): BigInteger {
+        return retryExecutor.execute { rpcClient.getNativeBalanceAtBlock(walletAddress, blockNumber) }
+    }
+
+    override fun getTokenBalanceAtBlock(walletAddress: String, tokenAddress: String, blockNumber: Long): BigInteger {
+        return retryExecutor.execute { rpcClient.getTokenBalanceAtBlock(walletAddress, tokenAddress, blockNumber) }
     }
 
     private fun blockChunks(fromBlock: Long, toBlock: Long): List<Pair<Long, Long>> {

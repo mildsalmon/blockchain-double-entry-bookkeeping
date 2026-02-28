@@ -22,7 +22,14 @@ class WalletController(
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun createWallet(@Valid @RequestBody request: WalletCreateRequest): WalletResponse {
-        return ingestWalletUseCase.registerWallet(request.address, request.label, request.startBlock)
+        return ingestWalletUseCase.registerWallet(
+            address = request.address,
+            label = request.label,
+            mode = request.mode,
+            cutoffBlock = request.cutoffBlock,
+            startBlock = request.startBlock,
+            trackedTokens = request.trackedTokens
+        )
     }
 
     @GetMapping
