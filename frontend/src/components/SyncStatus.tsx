@@ -35,6 +35,12 @@ export function SyncStatus({ wallets, onRetry, onDelete, busyActionKey }: SyncSt
           const retrying = busyActionKey === retryKey;
           const deleting = busyActionKey === deleteKey;
           const busy = Boolean(busyActionKey);
+          const syncedBlock = wallet.deltaSyncedBlock ?? wallet.lastSyncedBlock;
+          const snapshotBaseBlock = wallet.snapshotBlock ?? wallet.cutoffBlock;
+          const syncedSinceSnapshot =
+            snapshotBaseBlock !== null && syncedBlock !== null && syncedBlock >= snapshotBaseBlock
+              ? syncedBlock - snapshotBaseBlock
+              : null;
 
           return (
             <li key={wallet.address} className="rounded-lg border border-slate-200 p-3">
@@ -46,12 +52,17 @@ export function SyncStatus({ wallets, onRetry, onDelete, busyActionKey }: SyncSt
                 {wallet.syncStatus}
               </p>
               <p className="mt-1 text-xs text-slate-600">{phaseLabel[wallet.syncPhase] ?? wallet.syncPhase}</p>
-              {wallet.mode === 'BALANCE_FLOW_CUTOFF' && (
-                <p className="mt-1 text-xs text-slate-500">
-                  cutoff: {wallet.cutoffBlock ?? '-'} / snapshot: {wallet.snapshotBlock ?? '-'} / delta:{' '}
-                  {wallet.deltaSyncedBlock ?? '-'}
-                </p>
-              )}
+              <div className="mt-2 space-y-1 text-xs text-slate-600">
+                {wallet.mode === 'BALANCE_FLOW_CUTOFF' && (
+                  <>
+                    <p>컷오프 기준 블록: {formatBlock(wallet.cutoffBlock)}</p>
+                    <p>스냅샷 생성 블록: {formatBlock(wallet.snapshotBlock)}</p>
+                    <p>스냅샷 이후 반영 블록 수: {syncedSinceSnapshot !== null ? `${formatBlock(syncedSinceSnapshot)} blocks` : '-'}</p>
+                  </>
+                )}
+                <p>현재 동기화 도달 블록: {formatBlock(syncedBlock)}</p>
+                <p>마지막 동기화 시각: {formatDateTime(wallet.lastSyncedAt)}</p>
+              </div>
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
@@ -81,4 +92,16 @@ export function SyncStatus({ wallets, onRetry, onDelete, busyActionKey }: SyncSt
       </ul>
     </div>
   );
+}
+
+function formatBlock(value: number | null): string {
+  if (value === null || value === undefined) return '-';
+  return value.toLocaleString('ko-KR');
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('ko-KR', { hour12: false });
 }
