@@ -11,6 +11,16 @@ const statusColor: Record<string, string> = {
   FAILED: 'text-ember'
 };
 
+const phaseLabel: Record<string, string> = {
+  NONE: '기본 모드',
+  SNAPSHOT_PENDING: '스냅샷 대기',
+  SNAPSHOTTING: '스냅샷 수집 중',
+  SNAPSHOT_COMPLETED: '스냅샷 완료',
+  DELTA_SYNCING: '이후 블록 동기화 중',
+  DELTA_COMPLETED: '이후 블록 동기화 완료',
+  FAILED: '동기화 실패'
+};
+
 export function SyncStatus({ wallets }: SyncStatusProps) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white/90 p-5">
@@ -19,9 +29,19 @@ export function SyncStatus({ wallets }: SyncStatusProps) {
         {wallets.map((wallet) => (
           <li key={wallet.address} className="rounded-lg border border-slate-200 p-3">
             <p className="font-mono text-xs text-slate-600">{wallet.address}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {wallet.mode === 'BALANCE_FLOW_CUTOFF' ? '컷오프 흐름 모드' : '기본 전체 동기화 모드'}
+            </p>
             <p className={`mt-1 text-sm font-semibold ${statusColor[wallet.syncStatus] ?? 'text-slate-500'}`}>
               {wallet.syncStatus}
             </p>
+            <p className="mt-1 text-xs text-slate-600">{phaseLabel[wallet.syncPhase] ?? wallet.syncPhase}</p>
+            {wallet.mode === 'BALANCE_FLOW_CUTOFF' && (
+              <p className="mt-1 text-xs text-slate-500">
+                cutoff: {wallet.cutoffBlock ?? '-'} / snapshot: {wallet.snapshotBlock ?? '-'} / delta:{' '}
+                {wallet.deltaSyncedBlock ?? '-'}
+              </p>
+            )}
           </li>
         ))}
         {wallets.length === 0 && <li className="text-sm text-slate-500">아직 등록된 지갑이 없습니다.</li>}

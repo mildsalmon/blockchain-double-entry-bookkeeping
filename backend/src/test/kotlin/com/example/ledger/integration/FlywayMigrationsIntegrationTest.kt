@@ -6,12 +6,12 @@ import kotlin.test.assertEquals
 class FlywayMigrationsIntegrationTest : IntegrationTestBase() {
 
     @Test
-    fun `migration V6 should exist and seed additional system accounts`() {
-        val v6Count = jdbcTemplate.queryForObject(
-            "SELECT count(*) FROM flyway_schema_history WHERE version = '6' AND success = true",
+    fun `migration V7 should exist and create cutoff tables`() {
+        val v7Count = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM flyway_schema_history WHERE version = '7' AND success = true",
             Long::class.java
         ) ?: 0L
-        assertEquals(1L, v6Count)
+        assertEquals(1L, v7Count)
 
         val unspecifiedIncomeCount = jdbcTemplate.queryForObject(
             "SELECT count(*) FROM accounts WHERE code = '수익:미지정수입' AND is_system = true",
@@ -24,6 +24,17 @@ class FlywayMigrationsIntegrationTest : IntegrationTestBase() {
             Long::class.java
         ) ?: 0L
         assertEquals(1L, externalAssetCount)
+
+        val trackedTokenTableCount = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'wallet_tracked_tokens'",
+            Long::class.java
+        ) ?: 0L
+        assertEquals(1L, trackedTokenTableCount)
+
+        val snapshotTableCount = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'wallet_balance_snapshots'",
+            Long::class.java
+        ) ?: 0L
+        assertEquals(1L, snapshotTableCount)
     }
 }
-

@@ -1,5 +1,5 @@
 import type { Journal, JournalDetail } from '@/types/journal';
-import type { Wallet } from '@/types/wallet';
+import type { Wallet, WalletCreatePayload } from '@/types/wallet';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json'
@@ -24,10 +24,10 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  createWallet: (address: string, label?: string, startBlock?: number) =>
+  createWallet: (payload: WalletCreatePayload) =>
     request<Wallet>('/api/wallets', {
       method: 'POST',
-      body: JSON.stringify({ address, label, startBlock })
+      body: JSON.stringify(payload)
     }),
   listWallets: () => request<Wallet[]>('/api/wallets'),
   getWalletStatus: (address: string) => request<Wallet>(`/api/wallets/${address}/status`),

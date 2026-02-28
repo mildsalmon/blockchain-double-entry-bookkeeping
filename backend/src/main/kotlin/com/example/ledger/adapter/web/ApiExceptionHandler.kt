@@ -1,5 +1,6 @@
 package com.example.ledger.adapter.web
 
+import com.example.ledger.application.exception.ConflictException
 import com.example.ledger.adapter.ethereum.EthereumRpcException
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
@@ -29,8 +30,13 @@ class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse(ex.message ?: "Invalid request"))
     }
 
+    @ExceptionHandler(ConflictException::class)
+    fun handleConflict(ex: ConflictException): ResponseEntity<ErrorResponse> {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse(ex.message ?: "Conflict"))
+    }
+
     @ExceptionHandler(IllegalStateException::class)
-    fun handleConflict(ex: IllegalStateException): ResponseEntity<ErrorResponse> {
+    fun handleBadState(ex: IllegalStateException): ResponseEntity<ErrorResponse> {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorResponse(ex.message ?: "Invalid state"))
     }
 

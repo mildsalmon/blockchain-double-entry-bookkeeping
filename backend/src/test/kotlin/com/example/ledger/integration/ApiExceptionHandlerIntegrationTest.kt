@@ -75,7 +75,16 @@ class ApiExceptionHandlerIntegrationTest : IntegrationTestBase() {
 
     @Test
     fun `data integrity violation is translated to 409`() {
-        whenever(ingestWalletUseCase.registerWallet(any(), anyOrNull(), anyOrNull())).thenThrow(
+        whenever(
+            ingestWalletUseCase.registerWallet(
+                any(),
+                anyOrNull(),
+                anyOrNull(),
+                anyOrNull(),
+                anyOrNull(),
+                anyOrNull()
+            )
+        ).thenThrow(
             DataIntegrityViolationException("duplicate key value violates unique constraint")
         )
 

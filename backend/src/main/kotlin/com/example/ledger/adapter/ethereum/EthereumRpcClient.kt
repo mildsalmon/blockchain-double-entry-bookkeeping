@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
+import java.math.BigInteger
 
 @Component
 class EthereumRpcClient(
@@ -100,6 +101,40 @@ class EthereumRpcClient(
             ?: throw EthereumRpcException(-1, "eth_blockNumber returned null result")
     }
 
+    fun getNativeBalanceAtBlock(walletAddress: String, blockNumber: Long): BigInteger {
+        val payload = buildRequest("eth_getBalance", listOf(walletAddress, blockNumber.toHex()))
+
+        val responseBody = post(payload) ?: return BigInteger.ZERO
+        val response: RpcResponse<String> = objectMapper.readValue(
+            responseBody,
+            object : TypeReference<RpcResponse<String>>() {}
+        )
+        response.error?.let {
+            log.warn("eth_getBalance RPC error {}: {}", it.code, it.message)
+            return BigInteger.ZERO
+        }
+        return response.result?.hexToBigInteger() ?: BigInteger.ZERO
+    }
+
+    fun getTokenBalanceAtBlock(walletAddress: String, tokenAddress: String, blockNumber: Long): BigInteger {
+        val callObject = mapOf(
+            "to" to tokenAddress,
+            "data" to encodeBalanceOf(walletAddress)
+        )
+        val payload = buildRequest("eth_call", listOf(callObject, blockNumber.toHex()))
+
+        val responseBody = post(payload) ?: return BigInteger.ZERO
+        val response: RpcResponse<String> = objectMapper.readValue(
+            responseBody,
+            object : TypeReference<RpcResponse<String>>() {}
+        )
+        response.error?.let {
+            log.warn("eth_call(balanceOf) RPC error {}: {}", it.code, it.message)
+            return BigInteger.ZERO
+        }
+        return response.result?.hexToBigInteger() ?: BigInteger.ZERO
+    }
+
     private fun buildRequest(method: String, params: List<Any?>): Map<String, Any?> = mapOf(
         "jsonrpc" to "2.0",
         "method" to method,
@@ -119,6 +154,11 @@ class EthereumRpcClient(
 
 private fun Long.toHex(): String = "0x${toString(16)}"
 private fun String.hexToLong(): Long = removePrefix("0x").ifEmpty { "0" }.toLong(16)
+private fun String.hexToBigInteger(): BigInteger = BigInteger(removePrefix("0x").ifEmpty { "0" }, 16)
+private fun encodeBalanceOf(walletAddress: String): String {
+    val cleanAddress = walletAddress.removePrefix("0x").lowercase().padStart(64, '0')
+    return "0x70a08231$cleanAddress"
+}
 
 class EthereumRpcException(
     val code: Int,
