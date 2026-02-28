@@ -10,6 +10,7 @@ import com.example.ledger.domain.port.BlockchainDataPort
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import org.springframework.web.reactive.function.client.WebClientResponseException
 import java.math.BigInteger
 import java.time.Instant
 
@@ -93,7 +94,7 @@ class EthereumRpcAdapter(
                             rpcClient.getLogs(start, end, listOf(topic0))
                         }
                     },
-                    shouldSplit = { error -> error is EthereumRpcException && isTooManyResultsError(error) }
+                    shouldSplit = { error -> shouldSplitLogRangeError(error) }
                 )
                 val relevant = logs.filter { log -> isWalletRelatedLog(log, paddedWallet) }
                 result.addAll(relevant)
@@ -242,6 +243,17 @@ internal fun isTooManyResultsError(error: EthereumRpcException): Boolean {
         || message.contains("query returned more than")
         || message.contains("query exceeds max results")
         || message.contains("retry with the range")
+}
+
+internal fun shouldSplitLogRangeError(error: Throwable): Boolean {
+    if (error is EthereumRpcException && isTooManyResultsError(error)) {
+        return true
+    }
+    if (error is WebClientResponseException) {
+        val statusCode = error.statusCode.value()
+        return statusCode == 408 || statusCode == 429 || statusCode >= 500
+    }
+    return false
 }
 
 internal fun <T> fetchWithAdaptiveRange(

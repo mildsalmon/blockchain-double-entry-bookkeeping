@@ -1,5 +1,7 @@
 package com.example.ledger.adapter.ethereum
 
+import org.springframework.http.HttpHeaders
+import org.springframework.web.reactive.function.client.WebClientResponseException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -65,5 +67,33 @@ class AdaptiveRangeFetchTest {
             calls
         )
         assertEquals(listOf("24554836-24554990", "24554991-24555144"), result)
+    }
+
+    @Test
+    fun `splits block range when provider returns request timeout`() {
+        val calls = mutableListOf<Pair<Long, Long>>()
+
+        val result = fetchWithAdaptiveRange(
+            fromBlock = 10L,
+            toBlock = 19L,
+            fetch = { from, to ->
+                calls += Pair(from, to)
+                if (from == 10L && to == 19L) {
+                    throw WebClientResponseException.create(
+                        408,
+                        "Request Timeout",
+                        HttpHeaders.EMPTY,
+                        ByteArray(0),
+                        null,
+                        null
+                    )
+                }
+                listOf("$from-$to")
+            },
+            shouldSplit = { shouldSplitLogRangeError(it) }
+        )
+
+        assertEquals(listOf(10L to 19L, 10L to 14L, 15L to 19L), calls)
+        assertEquals(listOf("10-14", "15-19"), result)
     }
 }
