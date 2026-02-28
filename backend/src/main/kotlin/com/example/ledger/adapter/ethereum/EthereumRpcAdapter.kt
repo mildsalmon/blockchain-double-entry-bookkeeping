@@ -7,6 +7,8 @@ import com.example.ledger.adapter.ethereum.dto.TransactionReceiptResponse
 import com.example.ledger.adapter.ethereum.dto.TransactionResponse
 import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.port.BlockchainDataPort
+import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.core.io.buffer.DataBufferLimitException
@@ -247,7 +249,13 @@ internal fun isTooManyResultsError(error: EthereumRpcException): Boolean {
 }
 
 internal fun shouldSplitLogRangeError(error: Throwable): Boolean {
-    if (hasMessageInCause(error, "unexpected end-of-input")) {
+    if (error is JsonParseException || hasCause<JsonParseException>(error)) {
+        return true
+    }
+    if (error is JsonMappingException || hasCause<JsonMappingException>(error)) {
+        return true
+    }
+    if (hasMessageInCause(error, "unexpected end-of-input") || hasMessageInCause(error, "unexpected close marker")) {
         return true
     }
     if (error is DataBufferLimitException || hasCause<DataBufferLimitException>(error)) {

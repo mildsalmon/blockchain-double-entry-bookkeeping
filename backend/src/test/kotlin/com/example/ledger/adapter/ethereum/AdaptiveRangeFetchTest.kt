@@ -147,4 +147,29 @@ class AdaptiveRangeFetchTest {
         assertEquals(listOf(30L to 39L, 30L to 34L, 35L to 39L), calls)
         assertEquals(listOf("30-34", "35-39"), result)
     }
+
+    @Test
+    fun `splits block range when provider returns malformed json close marker error`() {
+        val calls = mutableListOf<Pair<Long, Long>>()
+
+        val result = fetchWithAdaptiveRange(
+            fromBlock = 40L,
+            toBlock = 49L,
+            fetch = { from, to ->
+                calls += Pair(from, to)
+                if (from == 40L && to == 49L) {
+                    val malformedJsonError = JsonMappingException.from(
+                        null as com.fasterxml.jackson.core.JsonParser?,
+                        "Unexpected close marker '}': expected ']'"
+                    )
+                    throw RuntimeException("wrapped parser error", malformedJsonError)
+                }
+                listOf("$from-$to")
+            },
+            shouldSplit = { shouldSplitLogRangeError(it) }
+        )
+
+        assertEquals(listOf(40L to 49L, 40L to 44L, 45L to 49L), calls)
+        assertEquals(listOf("40-44", "45-49"), result)
+    }
 }
