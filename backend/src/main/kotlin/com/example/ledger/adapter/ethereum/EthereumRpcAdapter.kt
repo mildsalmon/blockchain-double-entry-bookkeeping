@@ -9,6 +9,7 @@ import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.port.BlockchainDataPort
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
+import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClientResponseException
 import java.math.BigInteger
@@ -246,12 +247,26 @@ internal fun isTooManyResultsError(error: EthereumRpcException): Boolean {
 }
 
 internal fun shouldSplitLogRangeError(error: Throwable): Boolean {
+    if (error is DataBufferLimitException || hasCause<DataBufferLimitException>(error)) {
+        return true
+    }
     if (error is EthereumRpcException && isTooManyResultsError(error)) {
         return true
     }
     if (error is WebClientResponseException) {
         val statusCode = error.statusCode.value()
         return statusCode == 408 || statusCode == 429 || statusCode >= 500
+    }
+    return false
+}
+
+private inline fun <reified T : Throwable> hasCause(error: Throwable): Boolean {
+    var current: Throwable? = error
+    while (current != null) {
+        if (current is T) {
+            return true
+        }
+        current = current.cause
     }
     return false
 }

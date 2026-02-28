@@ -1,5 +1,6 @@
 package com.example.ledger.adapter.ethereum
 
+import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.http.HttpHeaders
 import org.springframework.web.reactive.function.client.WebClientResponseException
 import kotlin.test.Test
@@ -95,5 +96,29 @@ class AdaptiveRangeFetchTest {
 
         assertEquals(listOf(10L to 19L, 10L to 14L, 15L to 19L), calls)
         assertEquals(listOf("10-14", "15-19"), result)
+    }
+
+    @Test
+    fun `splits block range when response body exceeds buffer limit`() {
+        val calls = mutableListOf<Pair<Long, Long>>()
+
+        val result = fetchWithAdaptiveRange(
+            fromBlock = 20L,
+            toBlock = 29L,
+            fetch = { from, to ->
+                calls += Pair(from, to)
+                if (from == 20L && to == 29L) {
+                    throw RuntimeException(
+                        "wrapped webclient error",
+                        DataBufferLimitException("Exceeded limit on max bytes to buffer : 262144")
+                    )
+                }
+                listOf("$from-$to")
+            },
+            shouldSplit = { shouldSplitLogRangeError(it) }
+        )
+
+        assertEquals(listOf(20L to 29L, 20L to 24L, 25L to 29L), calls)
+        assertEquals(listOf("20-24", "25-29"), result)
     }
 }

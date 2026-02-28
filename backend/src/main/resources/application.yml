@@ -28,6 +28,7 @@ server:
 app:
   ethereum:
     rpc-url: ${ETHEREUM_RPC_URL:https://eth.drpc.org}
+    max-response-bytes: ${ETHEREUM_MAX_RESPONSE_BYTES:16777216}
   coingecko:
     base-url: ${COINGECKO_BASE_URL:https://api.coingecko.com/api/v3}
     api-key: ${COINGECKO_API_KEY:}

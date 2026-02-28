@@ -17,12 +17,16 @@ import java.math.BigInteger
 @Component
 class EthereumRpcClient(
     @Value("\${app.ethereum.rpc-url}") rpcUrl: String,
+    @Value("\${app.ethereum.max-response-bytes:16777216}") maxResponseBytes: Int,
     private val objectMapper: ObjectMapper
 ) {
     private val log = LoggerFactory.getLogger(EthereumRpcClient::class.java)
 
     private val webClient: WebClient = WebClient.builder()
         .baseUrl(rpcUrl.trimEnd('/'))
+        .codecs { codecs ->
+            codecs.defaultCodecs().maxInMemorySize(maxResponseBytes.coerceAtLeast(262_144))
+        }
         .build()
 
     fun getLogs(fromBlock: Long, toBlock: Long, topics: List<String?>): List<LogEntry> {
