@@ -90,15 +90,17 @@ class CutoffPipelineIntegrationTest : IntegrationTestBase() {
         assertEquals(101L, savedWallet.lastSyncedBlock)
 
         val rawTransactions = rawTransactionRepository.findByWalletAddress(walletAddress)
-        assertEquals(1, rawTransactions.size)
+        assertEquals(2, rawTransactions.size)
 
-        val rawTxId = rawTransactions.first().id
+        val rawTxId = rawTransactions.first { it.txHash == "0xcutoff101" }.id
         assertNotNull(rawTxId)
         val events = accountingEventRepository.findByRawTransactionId(rawTxId)
         assertTrue(events.isNotEmpty())
 
         val journals = journalRepository.findByFilters(size = 100)
-        assertEquals(0, journals.size)
+        assertEquals(2, journals.size)
+        assertTrue(journals.any { it.description.startsWith("Cutoff opening balance") })
+        assertTrue(journals.any { it.description == "Incoming ETH" })
 
         verify(blockchainDataPort).fetchTransactions(eq(walletAddress), eq(101L))
         verify(blockchainDataPort).fetchTransactions(eq(walletAddress), eq(102L))

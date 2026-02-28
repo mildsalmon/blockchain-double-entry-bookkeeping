@@ -9,6 +9,7 @@ import com.example.ledger.domain.model.JournalEntry
 import com.example.ledger.domain.model.JournalLine
 import com.example.ledger.domain.model.JournalStatus
 import com.example.ledger.domain.model.PriceSource
+import com.example.ledger.domain.model.WalletBalanceSnapshot
 import com.example.ledger.domain.port.AccountRepository
 import com.example.ledger.domain.port.JournalRepository
 import org.slf4j.LoggerFactory
@@ -18,6 +19,7 @@ import org.springframework.retry.annotation.Recover
 import org.springframework.retry.annotation.Retryable
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.math.MathContext
 import java.math.RoundingMode
 import java.time.Instant
@@ -39,6 +41,9 @@ class LedgerService(
         private const val REALIZED_LOSS_ACCOUNT = "비용:실현손실"
         private const val AIRDROP_ACCOUNT = "수익:에어드롭"
         private const val UNSPECIFIED_INCOME_ACCOUNT = "수익:미지정수입"
+        private const val EXTERNAL_ASSET_ACCOUNT = "자산:외부"
+        private const val NATIVE_ETH_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
+        private val WEI_PER_ETH = BigDecimal.TEN.pow(18)
     }
 
     private val logger = LoggerFactory.getLogger(LedgerService::class.java)
@@ -138,6 +143,61 @@ class LedgerService(
         return saved
     }
 
+    fun generateBalanceFlowOpeningEntries(
+        rawTransactionId: Long,
+        snapshots: List<WalletBalanceSnapshot>,
+        entryDate: Instant
+    ): List<JournalEntry> {
+        if (snapshots.isEmpty()) return emptyList()
+        ensureExternalAccountExists()
+
+        return snapshots
+            .filter { it.balanceRaw > BigInteger.ZERO }
+            .map { snapshot ->
+                val quantity = snapshotBalanceToQuantity(snapshot)
+                if (quantity <= BigDecimal.ZERO) {
+                    return@map null
+                }
+
+                val tokenSymbol = balanceFlowSymbol(snapshot.tokenSymbol, snapshot.tokenAddress)
+                val assetAccountCode = resolveBalanceFlowAssetAccountCode(tokenSymbol, snapshot.tokenAddress)
+                JournalEntry(
+                    rawTransactionId = rawTransactionId,
+                    entryDate = entryDate,
+                    description = "Cutoff opening balance $tokenSymbol",
+                    status = JournalStatus.AUTO_CLASSIFIED,
+                    lines = listOf(
+                        line(assetAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
+                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                    )
+                )
+            }
+            .filterNotNull()
+            .map { journalRepository.save(it) }
+    }
+
+    fun generateBalanceFlowDeltaEntries(
+        rawTransactionId: Long,
+        events: List<AccountingEvent>,
+        entryDate: Instant
+    ): List<JournalEntry> {
+        if (events.isEmpty()) return emptyList()
+        ensureExternalAccountExists()
+
+        return events.mapNotNull { event ->
+            val entry = createBalanceFlowDeltaEntry(rawTransactionId, event, entryDate) ?: return@mapNotNull null
+            val saved = journalRepository.save(entry)
+            auditService.log(
+                entityType = "JOURNAL_ENTRY",
+                entityId = saved.id?.toString() ?: "",
+                action = "CREATE",
+                oldValue = null,
+                newValue = mapOf("status" to saved.status.name, "rawTransactionId" to saved.rawTransactionId)
+            )
+            saved
+        }
+    }
+
     private fun createEntry(
         walletAddress: String,
         rawTransactionId: Long,
@@ -168,6 +228,94 @@ class LedgerService(
                 offsetAccountCode = AIRDROP_ACCOUNT
             )
             EventType.UNCLASSIFIED -> throw IllegalArgumentException("UNCLASSIFIED event cannot generate journal entry")
+        }
+    }
+
+    private fun createBalanceFlowDeltaEntry(
+        rawTransactionId: Long,
+        event: AccountingEvent,
+        entryDate: Instant
+    ): JournalEntry? {
+        val tokenSymbol = balanceFlowSymbol(event.tokenSymbol, event.tokenAddress)
+        val tokenAccountCode = resolveBalanceFlowAssetAccountCode(tokenSymbol, event.tokenAddress)
+        val quantity = event.amountDecimal.abs()
+
+        return when (event.eventType) {
+            EventType.INCOMING ->
+                JournalEntry(
+                    accountingEventId = event.id,
+                    rawTransactionId = rawTransactionId,
+                    entryDate = entryDate,
+                    description = "Incoming $tokenSymbol",
+                    status = JournalStatus.AUTO_CLASSIFIED,
+                    lines = listOf(
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
+                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                    )
+                )
+
+            EventType.OUTGOING ->
+                JournalEntry(
+                    accountingEventId = event.id,
+                    rawTransactionId = rawTransactionId,
+                    entryDate = entryDate,
+                    description = "Outgoing $tokenSymbol",
+                    status = JournalStatus.AUTO_CLASSIFIED,
+                    lines = listOf(
+                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                    )
+                )
+
+            EventType.FEE ->
+                JournalEntry(
+                    accountingEventId = event.id,
+                    rawTransactionId = rawTransactionId,
+                    entryDate = entryDate,
+                    description = "Gas fee",
+                    status = JournalStatus.AUTO_CLASSIFIED,
+                    lines = listOf(
+                        line(GAS_FEE_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                    )
+                )
+
+            EventType.SWAP -> {
+                val tokenOutSymbol = balanceFlowSymbol(
+                    event.metadata["tokenOutSymbol"]?.toString(),
+                    event.metadata["tokenOutAddress"]?.toString()
+                )
+                val tokenOutAddress = event.metadata["tokenOutAddress"]?.toString()
+                val tokenOutAmount = event.metadata["amountOut"]?.toString()?.toBigDecimalOrNull()?.abs() ?: BigDecimal.ZERO
+                val tokenOutAccount = resolveBalanceFlowAssetAccountCode(tokenOutSymbol, tokenOutAddress)
+
+                JournalEntry(
+                    accountingEventId = event.id,
+                    rawTransactionId = rawTransactionId,
+                    entryDate = entryDate,
+                    description = "Swap $tokenSymbol -> $tokenOutSymbol",
+                    status = JournalStatus.AUTO_CLASSIFIED,
+                    lines = listOf(
+                        line(tokenOutAccount, tokenSymbol = tokenOutSymbol, tokenQuantity = tokenOutAmount),
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                    )
+                )
+            }
+
+            EventType.MANUAL_CLASSIFIED ->
+                JournalEntry(
+                    accountingEventId = event.id,
+                    rawTransactionId = rawTransactionId,
+                    entryDate = entryDate,
+                    description = "Incoming $tokenSymbol",
+                    status = JournalStatus.AUTO_CLASSIFIED,
+                    lines = listOf(
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
+                        line(AIRDROP_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                    )
+                )
+
+            EventType.UNCLASSIFIED -> null
         }
     }
 
@@ -318,10 +466,45 @@ class LedgerService(
         return code
     }
 
+    private fun resolveBalanceFlowAssetAccountCode(tokenSymbol: String, tokenAddress: String?): String {
+        if (tokenSymbol == "ETH" || tokenAddress.equals(NATIVE_ETH_TOKEN_ADDRESS, ignoreCase = true)) {
+            ensureAccountExists(ETH_ACCOUNT, "ETH 보유 자산", AccountCategory.ASSET, system = true)
+            return ETH_ACCOUNT
+        }
+
+        val code = "$ERC20_PREFIX${tokenSymbol.uppercase()}"
+        ensureAccountExists(code, "$tokenSymbol 보유 자산", AccountCategory.ASSET, system = true)
+        return code
+    }
+
+    private fun balanceFlowSymbol(tokenSymbol: String?, tokenAddress: String?): String {
+        if (tokenAddress.equals(NATIVE_ETH_TOKEN_ADDRESS, ignoreCase = true)) {
+            return "ETH"
+        }
+        val normalized = tokenSymbol?.trim().orEmpty()
+        if (normalized.isBlank() || normalized.equals("ERC20", ignoreCase = true) || normalized.equals("UNKNOWN", ignoreCase = true)) {
+            val suffix = tokenAddress?.removePrefix("0x")?.takeLast(8)?.uppercase()
+            return if (suffix.isNullOrBlank()) "ERC20" else "ERC20-$suffix"
+        }
+        return normalized.uppercase()
+    }
+
+    private fun snapshotBalanceToQuantity(snapshot: WalletBalanceSnapshot): BigDecimal {
+        return if (snapshot.tokenAddress.equals(NATIVE_ETH_TOKEN_ADDRESS, ignoreCase = true)) {
+            snapshot.balanceRaw.toBigDecimal().divide(WEI_PER_ETH, 18, RoundingMode.DOWN)
+        } else {
+            snapshot.balanceRaw.toBigDecimal()
+        }
+    }
+
     private fun ensureAccountExists(code: String, name: String, category: AccountCategory, system: Boolean) {
         accountRepository.insertIfAbsent(code, name, category, system)
         accountRepository.findByCode(code)
             ?: throw IllegalStateException("Account upsert failed for code=$code")
+    }
+
+    private fun ensureExternalAccountExists() {
+        ensureAccountExists(EXTERNAL_ASSET_ACCOUNT, "외부 상대 계정", AccountCategory.ASSET, system = true)
     }
 
     private fun line(
