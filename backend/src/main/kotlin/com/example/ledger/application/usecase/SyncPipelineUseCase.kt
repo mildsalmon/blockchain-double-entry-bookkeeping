@@ -15,6 +15,7 @@ import com.example.ledger.domain.port.TransactionDecoderPort
 import com.example.ledger.domain.port.WalletRepository
 import com.example.ledger.domain.service.ClassificationService
 import com.example.ledger.domain.service.LedgerService
+import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -32,6 +33,7 @@ class SyncPipelineUseCase(
     private val ledgerService: LedgerService,
     private val cutoffSnapshotService: CutoffSnapshotService
 ) {
+    private val logger = LoggerFactory.getLogger(SyncPipelineUseCase::class.java)
 
     @Async
     fun syncAsync(walletAddress: String) {
@@ -39,8 +41,18 @@ class SyncPipelineUseCase(
     }
 
     fun sync(walletAddress: String) {
-        val wallet = walletRepository.findByAddress(walletAddress)
+        val loadedWallet = walletRepository.findByAddress(walletAddress)
             ?: throw IllegalArgumentException("Wallet not found: $walletAddress")
+
+        if (!walletRepository.trySetSyncing(walletAddress)) {
+            logger.info("Wallet is already syncing. walletAddress={}", walletAddress)
+            return
+        }
+
+        val wallet = walletRepository.findByAddress(walletAddress) ?: loadedWallet.copy(
+            syncStatus = SyncStatus.SYNCING,
+            updatedAt = Instant.now()
+        )
 
         if (wallet.syncMode == WalletSyncMode.BALANCE_FLOW_CUTOFF) {
             syncCutoffMode(wallet)
@@ -52,7 +64,6 @@ class SyncPipelineUseCase(
 
     private fun syncFullMode(wallet: Wallet) {
         val walletAddress = wallet.address
-        walletRepository.save(wallet.copy(syncStatus = SyncStatus.SYNCING, updatedAt = Instant.now()))
 
         try {
             val rawTransactions = blockchainDataPort.fetchTransactions(walletAddress, wallet.lastSyncedBlock)

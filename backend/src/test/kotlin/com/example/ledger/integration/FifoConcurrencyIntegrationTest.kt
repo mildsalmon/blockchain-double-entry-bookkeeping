@@ -65,7 +65,6 @@ class FifoConcurrencyIntegrationTest : IntegrationTestBase() {
         assertTrue(remaining >= BigDecimal.ZERO, "remaining=$remaining")
         assertTrue((totalConsumed + remaining) <= BigDecimal("1.00000001"), "consumed=$totalConsumed remaining=$remaining")
 
-        // At most one serialization/locking error is expected under SERIALIZABLE race.
-        assertTrue(errors.size <= 1, "errors=$errors")
+        assertTrue(errors.isEmpty(), "errors=$errors")
     }
 }

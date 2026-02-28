@@ -55,4 +55,8 @@ class WalletJpaRepository(
             wallet.toDomain().copy(trackedTokens = trackedTokens)
         }
     }
+
+    override fun trySetSyncing(address: String): Boolean {
+        return springDataWalletRepository.setStatusSyncingIfNotAlready(address) > 0
+    }
 }

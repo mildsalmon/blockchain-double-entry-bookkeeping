@@ -8,6 +8,7 @@ import com.example.ledger.domain.model.Wallet
 import com.example.ledger.domain.model.WalletSyncMode
 import com.example.ledger.domain.model.WalletSyncPhase
 import com.example.ledger.domain.port.WalletRepository
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import java.time.Instant
 
@@ -53,21 +54,26 @@ class IngestWalletUseCase(
             WalletSyncMode.BALANCE_FLOW_CUTOFF -> resolvedCutoffBlock
         }
 
-        val wallet = walletRepository.save(
-            Wallet(
-                address = address,
-                label = label,
-                syncMode = resolvedMode,
-                syncPhase = syncPhase,
-                syncStatus = SyncStatus.PENDING,
-                cutoffBlock = resolvedCutoffBlock,
-                trackedTokens = normalizedTrackedTokens,
-                lastSyncedAt = null,
-                lastSyncedBlock = initialLastSyncedBlock,
-                createdAt = Instant.now(),
-                updatedAt = Instant.now()
+        val wallet = try {
+            walletRepository.save(
+                Wallet(
+                    address = address,
+                    label = label,
+                    syncMode = resolvedMode,
+                    syncPhase = syncPhase,
+                    syncStatus = SyncStatus.PENDING,
+                    cutoffBlock = resolvedCutoffBlock,
+                    trackedTokens = normalizedTrackedTokens,
+                    lastSyncedAt = null,
+                    lastSyncedBlock = initialLastSyncedBlock,
+                    createdAt = Instant.now(),
+                    updatedAt = Instant.now()
+                )
             )
-        )
+        } catch (e: DataIntegrityViolationException) {
+            walletRepository.findByAddress(address)
+                ?: throw IllegalStateException("Wallet registration race detected but wallet was not found", e)
+        }
 
         syncPipelineUseCase.syncAsync(address)
         return wallet.toResponse()

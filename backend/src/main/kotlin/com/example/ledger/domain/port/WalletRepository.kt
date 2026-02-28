@@ -6,4 +6,5 @@ interface WalletRepository {
     fun save(wallet: Wallet): Wallet
     fun findByAddress(address: String): Wallet?
     fun findAll(): List<Wallet>
+    fun trySetSyncing(address: String): Boolean
 }
