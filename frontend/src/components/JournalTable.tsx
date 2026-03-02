@@ -30,8 +30,8 @@ export function JournalTable({ journals }: JournalTableProps) {
         </thead>
         <tbody>
           {journals.map((journal) => {
-            const debit = journal.lines.find((line) => Number(line.debitAmount) > 0);
-            const credit = journal.lines.find((line) => Number(line.creditAmount) > 0);
+            const debit = selectDebitLine(journal.lines);
+            const credit = selectCreditLine(journal.lines);
             return (
               <tr key={journal.id ?? `${journal.rawTransactionId}-${journal.entryDate}`} className="border-t border-slate-100">
                 <td className="px-4 py-3">{journal.entryDate.slice(0, 10)}</td>
@@ -40,8 +40,18 @@ export function JournalTable({ journals }: JournalTableProps) {
                     {journal.description}
                   </Link>
                 </td>
-                <td className="px-4 py-3">{debit?.accountCode ?? '-'}</td>
-                <td className="px-4 py-3">{credit?.accountCode ?? '-'}</td>
+                <td className="px-4 py-3">
+                  <p>{debit?.accountCode ?? '-'}</p>
+                  {debit?.tokenQuantity !== null && debit?.tokenQuantity !== undefined && (
+                    <p className="text-xs text-slate-500">{formatTokenQuantity(debit.tokenQuantity, debit.tokenSymbol)}</p>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <p>{credit?.accountCode ?? '-'}</p>
+                  {credit?.tokenQuantity !== null && credit?.tokenQuantity !== undefined && (
+                    <p className="text-xs text-slate-500">{formatTokenQuantity(credit.tokenQuantity, credit.tokenSymbol)}</p>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColor[journal.status] ?? 'bg-slate-100 text-slate-700'}`}>
                     {journal.status}
@@ -61,4 +71,25 @@ export function JournalTable({ journals }: JournalTableProps) {
       </table>
     </div>
   );
+}
+
+function selectDebitLine(lines: Journal['lines']) {
+  return lines.find((line) => numericSign(line.debitAmount) > 0 || numericSign(line.tokenQuantity) > 0);
+}
+
+function selectCreditLine(lines: Journal['lines']) {
+  return lines.find((line) => numericSign(line.creditAmount) > 0 || numericSign(line.tokenQuantity) < 0);
+}
+
+function numericSign(value: string | number | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  const text = String(value).trim();
+  if (text === '') return 0;
+  if (/^[+-]?0*(?:\.0+)?$/.test(text)) return 0;
+  return text.startsWith('-') ? -1 : 1;
+}
+
+function formatTokenQuantity(quantity: string | number, symbol: string | null): string {
+  const symbolSuffix = symbol ? ` ${symbol}` : '';
+  return `${quantity}${symbolSuffix}`;
 }
