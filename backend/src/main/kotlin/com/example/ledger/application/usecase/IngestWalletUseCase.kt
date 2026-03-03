@@ -101,6 +101,20 @@ class IngestWalletUseCase(
         )
     }
 
+    fun retrySync(address: String): WalletResponse {
+        val wallet = walletRepository.findByAddress(address)
+            ?: throw IllegalArgumentException("Wallet not found: $address")
+        syncPipelineUseCase.syncAsync(address)
+        return wallet.toResponse()
+    }
+
+    fun deleteWallet(address: String) {
+        val deleted = walletRepository.deleteByAddress(address)
+        if (!deleted) {
+            throw IllegalArgumentException("Wallet not found: $address")
+        }
+    }
+
     private fun Wallet.toResponse(): WalletResponse {
         return WalletResponse(
             id = id,

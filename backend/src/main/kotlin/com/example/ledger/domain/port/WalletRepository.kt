@@ -7,4 +7,5 @@ interface WalletRepository {
     fun findByAddress(address: String): Wallet?
     fun findAll(): List<Wallet>
     fun trySetSyncing(address: String): Boolean
+    fun deleteByAddress(address: String): Boolean
 }

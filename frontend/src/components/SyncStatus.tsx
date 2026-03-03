@@ -2,6 +2,9 @@ import type { Wallet } from '@/types/wallet';
 
 interface SyncStatusProps {
   wallets: Wallet[];
+  onRetry?: (address: string) => Promise<void>;
+  onDelete?: (address: string) => Promise<void>;
+  busyActionKey?: string | null;
 }
 
 const statusColor: Record<string, string> = {
@@ -21,31 +24,84 @@ const phaseLabel: Record<string, string> = {
   FAILED: '동기화 실패'
 };
 
-export function SyncStatus({ wallets }: SyncStatusProps) {
+export function SyncStatus({ wallets, onRetry, onDelete, busyActionKey }: SyncStatusProps) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white/90 p-5">
       <h2 className="text-lg font-semibold text-ink">등록된 지갑</h2>
       <ul className="mt-3 space-y-3">
-        {wallets.map((wallet) => (
-          <li key={wallet.address} className="rounded-lg border border-slate-200 p-3">
-            <p className="font-mono text-xs text-slate-600">{wallet.address}</p>
-            <p className="mt-1 text-xs text-slate-500">
-              {wallet.mode === 'BALANCE_FLOW_CUTOFF' ? '컷오프 흐름 모드' : '기본 전체 동기화 모드'}
-            </p>
-            <p className={`mt-1 text-sm font-semibold ${statusColor[wallet.syncStatus] ?? 'text-slate-500'}`}>
-              {wallet.syncStatus}
-            </p>
-            <p className="mt-1 text-xs text-slate-600">{phaseLabel[wallet.syncPhase] ?? wallet.syncPhase}</p>
-            {wallet.mode === 'BALANCE_FLOW_CUTOFF' && (
+        {wallets.map((wallet) => {
+          const retryKey = `retry:${wallet.address}`;
+          const deleteKey = `delete:${wallet.address}`;
+          const retrying = busyActionKey === retryKey;
+          const deleting = busyActionKey === deleteKey;
+          const busy = Boolean(busyActionKey);
+          const syncedBlock = wallet.deltaSyncedBlock ?? wallet.lastSyncedBlock;
+          const snapshotBaseBlock = wallet.snapshotBlock ?? wallet.cutoffBlock;
+          const syncedSinceSnapshot =
+            snapshotBaseBlock !== null && syncedBlock !== null && syncedBlock >= snapshotBaseBlock
+              ? syncedBlock - snapshotBaseBlock
+              : null;
+
+          return (
+            <li key={wallet.address} className="rounded-lg border border-slate-200 p-3">
+              <p className="font-mono text-xs text-slate-600">{wallet.address}</p>
               <p className="mt-1 text-xs text-slate-500">
-                cutoff: {wallet.cutoffBlock ?? '-'} / snapshot: {wallet.snapshotBlock ?? '-'} / delta:{' '}
-                {wallet.deltaSyncedBlock ?? '-'}
+                {wallet.mode === 'BALANCE_FLOW_CUTOFF' ? '컷오프 흐름 모드' : '기본 전체 동기화 모드'}
               </p>
-            )}
-          </li>
-        ))}
+              <p className={`mt-1 text-sm font-semibold ${statusColor[wallet.syncStatus] ?? 'text-slate-500'}`}>
+                {wallet.syncStatus}
+              </p>
+              <p className="mt-1 text-xs text-slate-600">{phaseLabel[wallet.syncPhase] ?? wallet.syncPhase}</p>
+              <div className="mt-2 space-y-1 text-xs text-slate-600">
+                {wallet.mode === 'BALANCE_FLOW_CUTOFF' && (
+                  <>
+                    <p>컷오프 기준 블록: {formatBlock(wallet.cutoffBlock)}</p>
+                    <p>스냅샷 생성 블록: {formatBlock(wallet.snapshotBlock)}</p>
+                    <p>스냅샷 이후 반영 블록 수: {syncedSinceSnapshot !== null ? `${formatBlock(syncedSinceSnapshot)} blocks` : '-'}</p>
+                  </>
+                )}
+                <p>현재 동기화 도달 블록: {formatBlock(syncedBlock)}</p>
+                <p>마지막 동기화 시각: {formatDateTime(wallet.lastSyncedAt)}</p>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!onRetry || busy}
+                  onClick={() => {
+                    if (onRetry) void onRetry(wallet.address);
+                  }}
+                >
+                  {retrying ? '재시도 중...' : '재시도'}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!onDelete || busy}
+                  onClick={() => {
+                    if (onDelete) void onDelete(wallet.address);
+                  }}
+                >
+                  {deleting ? '삭제 중...' : '삭제'}
+                </button>
+              </div>
+            </li>
+          );
+        })}
         {wallets.length === 0 && <li className="text-sm text-slate-500">아직 등록된 지갑이 없습니다.</li>}
       </ul>
     </div>
   );
+}
+
+function formatBlock(value: number | null): string {
+  if (value === null || value === undefined) return '-';
+  return value.toLocaleString('ko-KR');
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('ko-KR', { hour12: false });
 }

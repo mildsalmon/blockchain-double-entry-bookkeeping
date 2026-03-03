@@ -5,6 +5,7 @@ import com.example.ledger.application.dto.WalletResponse
 import com.example.ledger.application.dto.WalletStatusResponse
 import com.example.ledger.application.usecase.IngestWalletUseCase
 import jakarta.validation.Valid
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -40,5 +41,17 @@ class WalletController(
     @GetMapping("/{address}/status")
     fun getWalletStatus(@PathVariable address: String): WalletStatusResponse {
         return ingestWalletUseCase.getStatus(address)
+    }
+
+    @PostMapping("/{address}/retry")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    fun retryWalletSync(@PathVariable address: String): WalletResponse {
+        return ingestWalletUseCase.retrySync(address)
+    }
+
+    @DeleteMapping("/{address}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun deleteWallet(@PathVariable address: String) {
+        ingestWalletUseCase.deleteWallet(address)
     }
 }

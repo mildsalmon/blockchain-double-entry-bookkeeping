@@ -7,9 +7,13 @@ import com.example.ledger.adapter.ethereum.dto.TransactionReceiptResponse
 import com.example.ledger.adapter.ethereum.dto.TransactionResponse
 import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.port.BlockchainDataPort
+import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
+import org.springframework.core.io.buffer.DataBufferLimitException
 import org.springframework.stereotype.Component
+import org.springframework.web.reactive.function.client.WebClientResponseException
 import java.math.BigInteger
 import java.time.Instant
 
@@ -93,7 +97,7 @@ class EthereumRpcAdapter(
                             rpcClient.getLogs(start, end, listOf(topic0))
                         }
                     },
-                    shouldSplit = { error -> error is EthereumRpcException && isTooManyResultsError(error) }
+                    shouldSplit = { error -> shouldSplitLogRangeError(error) }
                 )
                 val relevant = logs.filter { log -> isWalletRelatedLog(log, paddedWallet) }
                 result.addAll(relevant)
@@ -236,9 +240,58 @@ internal fun isTooManyResultsError(error: EthereumRpcException): Boolean {
     val message = error.rpcMessage.lowercase()
     return error.code == -32005
         || error.code == -32016
+        || error.code == -32602
         || message.contains("too many results")
         || message.contains("result set too large")
         || message.contains("query returned more than")
+        || message.contains("query exceeds max results")
+        || message.contains("retry with the range")
+}
+
+internal fun shouldSplitLogRangeError(error: Throwable): Boolean {
+    if (error is JsonParseException || hasCause<JsonParseException>(error)) {
+        return true
+    }
+    if (error is JsonMappingException || hasCause<JsonMappingException>(error)) {
+        return true
+    }
+    if (hasMessageInCause(error, "unexpected end-of-input") || hasMessageInCause(error, "unexpected close marker")) {
+        return true
+    }
+    if (error is DataBufferLimitException || hasCause<DataBufferLimitException>(error)) {
+        return true
+    }
+    if (error is EthereumRpcException && isTooManyResultsError(error)) {
+        return true
+    }
+    if (error is WebClientResponseException) {
+        val statusCode = error.statusCode.value()
+        return statusCode == 408 || statusCode == 429 || statusCode >= 500
+    }
+    return false
+}
+
+private inline fun <reified T : Throwable> hasCause(error: Throwable): Boolean {
+    var current: Throwable? = error
+    while (current != null) {
+        if (current is T) {
+            return true
+        }
+        current = current.cause
+    }
+    return false
+}
+
+private fun hasMessageInCause(error: Throwable, messageFragment: String): Boolean {
+    var current: Throwable? = error
+    while (current != null) {
+        val message = current.message
+        if (message != null && message.contains(messageFragment, ignoreCase = true)) {
+            return true
+        }
+        current = current.cause
+    }
+    return false
 }
 
 internal fun <T> fetchWithAdaptiveRange(

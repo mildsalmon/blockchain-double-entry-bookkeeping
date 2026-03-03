@@ -27,7 +27,7 @@ class EthereumRpcClientErrorPropagationTest {
         every { requestHeadersSpec.retrieve() } returns responseSpec
         every { responseSpec.bodyToMono(String::class.java) } returns Mono.just(responseBody)
 
-        val client = EthereumRpcClient("http://localhost:8545", objectMapper)
+        val client = EthereumRpcClient("http://localhost:8545", 16 * 1024 * 1024, objectMapper)
         // Inject the mocked WebClient via reflection since the field is private
         val webClientField = EthereumRpcClient::class.java.getDeclaredField("webClient")
         webClientField.isAccessible = true

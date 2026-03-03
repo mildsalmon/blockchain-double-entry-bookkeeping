@@ -5,13 +5,15 @@ import com.example.ledger.adapter.persistence.spring.SpringDataWalletRepository
 import com.example.ledger.adapter.persistence.spring.SpringDataWalletTrackedTokenRepository
 import com.example.ledger.domain.model.Wallet
 import com.example.ledger.domain.port.WalletRepository
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 
 @Repository
 class WalletJpaRepository(
     private val springDataWalletRepository: SpringDataWalletRepository,
-    private val springDataWalletTrackedTokenRepository: SpringDataWalletTrackedTokenRepository
+    private val springDataWalletTrackedTokenRepository: SpringDataWalletTrackedTokenRepository,
+    private val jdbcTemplate: JdbcTemplate
 ) : WalletRepository {
     @Transactional
     override fun save(wallet: Wallet): Wallet {
@@ -58,5 +60,51 @@ class WalletJpaRepository(
 
     override fun trySetSyncing(address: String): Boolean {
         return springDataWalletRepository.setStatusSyncingIfNotAlready(address) > 0
+    }
+
+    @Transactional
+    override fun deleteByAddress(address: String): Boolean {
+        val wallet = springDataWalletRepository.findByAddress(address) ?: return false
+
+        jdbcTemplate.update(
+            """
+            DELETE FROM journal_entries
+            WHERE raw_transaction_id IN (
+                SELECT id FROM raw_transactions WHERE wallet_address = ?
+            )
+            OR accounting_event_id IN (
+                SELECT ae.id
+                FROM accounting_events ae
+                JOIN raw_transactions rt ON rt.id = ae.raw_transaction_id
+                WHERE rt.wallet_address = ?
+            )
+            """.trimIndent(),
+            address,
+            address
+        )
+        jdbcTemplate.update(
+            """
+            DELETE FROM accounting_events
+            WHERE raw_transaction_id IN (
+                SELECT id FROM raw_transactions WHERE wallet_address = ?
+            )
+            """.trimIndent(),
+            address
+        )
+        jdbcTemplate.update(
+            """
+            DELETE FROM cost_basis_lots
+            WHERE wallet_address = ?
+               OR raw_transaction_id IN (
+                    SELECT id FROM raw_transactions WHERE wallet_address = ?
+               )
+            """.trimIndent(),
+            address,
+            address
+        )
+        jdbcTemplate.update("DELETE FROM raw_transactions WHERE wallet_address = ?", address)
+
+        springDataWalletRepository.delete(wallet)
+        return true
     }
 }

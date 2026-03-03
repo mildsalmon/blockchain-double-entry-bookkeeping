@@ -7,6 +7,7 @@ import java.time.Instant
 interface JournalRepository {
     fun save(entry: JournalEntry): JournalEntry
     fun saveAll(entries: List<JournalEntry>): List<JournalEntry>
+    fun existsByRawTransactionId(rawTransactionId: Long): Boolean
     fun findById(id: Long): JournalEntry?
     fun findByFilters(
         fromDate: Instant? = null,
