@@ -9,6 +9,9 @@ export default function HomePage() {
           Ethereum 거래를 회계 분개로 변환하고 검토/승인/내보내기까지 처리하는 감사 워크벤치 MVP입니다.
         </p>
         <div className="mt-8 flex gap-3">
+          <Link className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white" href="/dashboard">
+            잔고 대시보드
+          </Link>
           <Link className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white" href="/wallets">
             지갑 등록
           </Link>

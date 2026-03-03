@@ -1,5 +1,6 @@
 import type { Journal, JournalDetail } from '@/types/journal';
 import type { Wallet, WalletCreatePayload } from '@/types/wallet';
+import type { BalanceDashboard } from '@/types/dashboard';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json'
@@ -68,6 +69,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ids })
     }),
+
+  getDashboardBalances: (params: Record<string, string | number | undefined>) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    });
+    return request<BalanceDashboard>(`/api/dashboard/balances?${query.toString()}`);
+  },
 
   listUnclassified: () => request<any[]>('/api/unclassified'),
   classifyUnclassified: (id: number, payload: unknown) =>
