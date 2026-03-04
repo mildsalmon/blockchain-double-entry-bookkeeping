@@ -99,6 +99,75 @@ class DashboardApiIntegrationTest : IntegrationTestBase() {
         }
     }
 
+    @Test
+    fun `dashboard balances orders positions by wallet then account then token`() {
+        val walletAddress = "0x8888888888888888888888888888888888888888"
+
+        val rawA = seedRawTx(walletAddress, "0xdash-order-a", Instant.parse("2026-02-22T00:00:00Z"))
+        val rawB = seedRawTx(walletAddress, "0xdash-order-b", Instant.parse("2026-02-23T00:00:00Z"))
+
+        journalRepository.save(
+            JournalEntry(
+                rawTransactionId = requireNotNull(rawA.id),
+                entryDate = rawA.blockTimestamp,
+                description = "Incoming WBTC",
+                status = JournalStatus.AUTO_CLASSIFIED,
+                lines = listOf(
+                    JournalLine(
+                        accountCode = "자산:암호화폐:ERC20:*",
+                        debitAmount = BigDecimal("1000"),
+                        creditAmount = BigDecimal.ZERO,
+                        tokenSymbol = "WBTC",
+                        tokenQuantity = BigDecimal("0.5")
+                    ),
+                    JournalLine(
+                        accountCode = "자산:외부",
+                        debitAmount = BigDecimal.ZERO,
+                        creditAmount = BigDecimal("1000"),
+                        tokenSymbol = "WBTC",
+                        tokenQuantity = BigDecimal("0.5")
+                    )
+                )
+            )
+        )
+
+        journalRepository.save(
+            JournalEntry(
+                rawTransactionId = requireNotNull(rawB.id),
+                entryDate = rawB.blockTimestamp,
+                description = "Incoming USDC",
+                status = JournalStatus.AUTO_CLASSIFIED,
+                lines = listOf(
+                    JournalLine(
+                        accountCode = "자산:암호화폐:ETH",
+                        debitAmount = BigDecimal("500"),
+                        creditAmount = BigDecimal.ZERO,
+                        tokenSymbol = "USDC",
+                        tokenQuantity = BigDecimal("10")
+                    ),
+                    JournalLine(
+                        accountCode = "자산:외부",
+                        debitAmount = BigDecimal.ZERO,
+                        creditAmount = BigDecimal("500"),
+                        tokenSymbol = "USDC",
+                        tokenQuantity = BigDecimal("10")
+                    )
+                )
+            )
+        )
+
+        mockMvc.get("/api/dashboard/balances") {
+            param("walletAddress", walletAddress)
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.summary.positionCount") { value(2) }
+            jsonPath("$.positions[0].accountCode") { value("자산:암호화폐:ERC20:*") }
+            jsonPath("$.positions[0].tokenSymbol") { value("WBTC") }
+            jsonPath("$.positions[1].accountCode") { value("자산:암호화폐:ETH") }
+            jsonPath("$.positions[1].tokenSymbol") { value("USDC") }
+        }
+    }
+
     private fun seedRawTx(walletAddress: String, txHash: String, timestamp: Instant): RawTransaction {
         return rawTransactionRepository.saveAll(
             listOf(

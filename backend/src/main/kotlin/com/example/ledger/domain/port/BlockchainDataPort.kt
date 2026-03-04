@@ -7,4 +7,6 @@ interface BlockchainDataPort {
     fun fetchTransactions(walletAddress: String, fromBlock: Long? = null): List<RawTransaction>
     fun getNativeBalanceAtBlock(walletAddress: String, blockNumber: Long): BigInteger
     fun getTokenBalanceAtBlock(walletAddress: String, tokenAddress: String, blockNumber: Long): BigInteger
+    fun getTokenSymbol(tokenAddress: String, blockNumber: Long? = null): String? = null
+    fun getTokenDecimals(tokenAddress: String, blockNumber: Long? = null): Int? = null
 }

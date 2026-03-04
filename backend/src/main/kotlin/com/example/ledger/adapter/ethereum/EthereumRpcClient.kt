@@ -13,6 +13,10 @@ import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import java.math.BigInteger
+import java.nio.charset.StandardCharsets
+
+private const val ERC20_SYMBOL_SELECTOR = "0x95d89b41"
+private const val ERC20_DECIMALS_SELECTOR = "0x313ce567"
 
 @Component
 class EthereumRpcClient(
@@ -139,6 +143,46 @@ class EthereumRpcClient(
         return response.result?.hexToBigInteger() ?: BigInteger.ZERO
     }
 
+    fun getTokenSymbol(tokenAddress: String, blockNumber: Long? = null): String? {
+        val callObject = mapOf(
+            "to" to tokenAddress,
+            "data" to ERC20_SYMBOL_SELECTOR
+        )
+        val blockTag = blockNumber?.toHex() ?: "latest"
+        val payload = buildRequest("eth_call", listOf(callObject, blockTag))
+
+        val responseBody = post(payload) ?: return null
+        val response: RpcResponse<String> = objectMapper.readValue(
+            responseBody,
+            object : TypeReference<RpcResponse<String>>() {}
+        )
+        response.error?.let {
+            log.warn("eth_call(symbol) RPC error {}: {}", it.code, it.message)
+            return null
+        }
+        return decodeTokenSymbol(response.result)
+    }
+
+    fun getTokenDecimals(tokenAddress: String, blockNumber: Long? = null): Int? {
+        val callObject = mapOf(
+            "to" to tokenAddress,
+            "data" to ERC20_DECIMALS_SELECTOR
+        )
+        val blockTag = blockNumber?.toHex() ?: "latest"
+        val payload = buildRequest("eth_call", listOf(callObject, blockTag))
+
+        val responseBody = post(payload) ?: return null
+        val response: RpcResponse<String> = objectMapper.readValue(
+            responseBody,
+            object : TypeReference<RpcResponse<String>>() {}
+        )
+        response.error?.let {
+            log.warn("eth_call(decimals) RPC error {}: {}", it.code, it.message)
+            return null
+        }
+        return decodeTokenDecimals(response.result)
+    }
+
     private fun buildRequest(method: String, params: List<Any?>): Map<String, Any?> = mapOf(
         "jsonrpc" to "2.0",
         "method" to method,
@@ -162,6 +206,76 @@ private fun String.hexToBigInteger(): BigInteger = BigInteger(removePrefix("0x")
 private fun encodeBalanceOf(walletAddress: String): String {
     val cleanAddress = walletAddress.removePrefix("0x").lowercase().padStart(64, '0')
     return "0x70a08231$cleanAddress"
+}
+
+private fun decodeTokenDecimals(hexValue: String?): Int? {
+    val clean = hexValue?.removePrefix("0x")?.trim().orEmpty()
+    if (clean.isEmpty()) return null
+    return try {
+        BigInteger(clean, 16).toInt()
+    } catch (_: NumberFormatException) {
+        null
+    } catch (_: ArithmeticException) {
+        null
+    }
+}
+
+private fun decodeTokenSymbol(hexValue: String?): String? {
+    val clean = hexValue?.removePrefix("0x")?.trim().orEmpty()
+    if (clean.isEmpty()) return null
+
+    decodeDynamicString(clean)?.let { return sanitizeTokenSymbol(it) }
+    decodeFixedBytesString(clean)?.let { return sanitizeTokenSymbol(it) }
+    return null
+}
+
+private fun decodeDynamicString(cleanHex: String): String? {
+    if (cleanHex.length < 128) return null
+    val lengthHex = cleanHex.substring(64, 128)
+    val byteLength = try {
+        BigInteger(lengthHex, 16).toInt()
+    } catch (_: NumberFormatException) {
+        return null
+    } catch (_: ArithmeticException) {
+        return null
+    }
+    if (byteLength <= 0) return ""
+
+    val dataStart = 128
+    val dataEnd = dataStart + byteLength * 2
+    if (cleanHex.length < dataEnd) return null
+    return decodeUtf8(cleanHex.substring(dataStart, dataEnd))
+}
+
+private fun decodeFixedBytesString(cleanHex: String): String? {
+    if (cleanHex.length < 64) return null
+    return decodeUtf8(cleanHex.substring(0, 64))
+}
+
+private fun decodeUtf8(hexChunk: String): String? {
+    val bytes = hexToByteArray(hexChunk) ?: return null
+    val normalized = bytes.takeWhile { byte -> byte.toInt() != 0 }.toByteArray()
+    if (normalized.isEmpty()) return null
+    return String(normalized, StandardCharsets.UTF_8)
+}
+
+private fun hexToByteArray(hex: String): ByteArray? {
+    if (hex.length % 2 != 0) return null
+    return try {
+        ByteArray(hex.length / 2) { index ->
+            hex.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+    } catch (_: NumberFormatException) {
+        null
+    }
+}
+
+private fun sanitizeTokenSymbol(symbol: String): String? {
+    val clean = symbol
+        .trim()
+        .filterNot { it.isISOControl() }
+        .trim()
+    return clean.ifBlank { null }
 }
 
 class EthereumRpcException(

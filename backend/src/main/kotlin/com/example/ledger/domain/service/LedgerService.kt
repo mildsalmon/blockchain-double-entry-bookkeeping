@@ -11,6 +11,7 @@ import com.example.ledger.domain.model.JournalStatus
 import com.example.ledger.domain.model.PriceSource
 import com.example.ledger.domain.model.WalletBalanceSnapshot
 import com.example.ledger.domain.port.AccountRepository
+import com.example.ledger.domain.port.BlockchainDataPort
 import com.example.ledger.domain.port.JournalRepository
 import org.slf4j.LoggerFactory
 import org.springframework.dao.CannotAcquireLockException
@@ -28,6 +29,7 @@ import java.time.Instant
 class LedgerService(
     private val journalRepository: JournalRepository,
     private val accountRepository: AccountRepository,
+    private val blockchainDataPort: BlockchainDataPort,
     private val fifoService: FifoService,
     private val gainLossService: GainLossService,
     private val auditService: AuditService
@@ -493,7 +495,10 @@ class LedgerService(
         return if (snapshot.tokenAddress.equals(NATIVE_ETH_TOKEN_ADDRESS, ignoreCase = true)) {
             snapshot.balanceRaw.toBigDecimal().divide(WEI_PER_ETH, 18, RoundingMode.DOWN)
         } else {
+            val decimals = blockchainDataPort.getTokenDecimals(snapshot.tokenAddress, snapshot.cutoffBlock)
+                ?: return snapshot.balanceRaw.toBigDecimal()
             snapshot.balanceRaw.toBigDecimal()
+                .movePointLeft(decimals)
         }
     }
 

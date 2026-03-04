@@ -97,15 +97,36 @@ export default function DashboardPage() {
             </tr>
           </thead>
           <tbody>
-            {dashboard.positions.map((position, index) => (
-              <tr key={`${position.walletAddress}-${position.accountCode}-${position.tokenSymbol}-${index}`} className="border-t border-slate-100">
-                <td className="px-4 py-3 font-mono text-xs text-slate-600">{position.walletAddress}</td>
-                <td className="px-4 py-3">{position.tokenSymbol}</td>
-                <td className="px-4 py-3">{position.accountCode}</td>
-                <td className="px-4 py-3 font-semibold text-slate-800">{position.quantity}</td>
-                <td className="px-4 py-3 text-slate-600">{formatDateTime(position.lastEntryDate)}</td>
-              </tr>
-            ))}
+            {dashboard.positions.flatMap((position, index, positions) => {
+              const rows: JSX.Element[] = [];
+              if (isNewAccountGroup(position, positions[index - 1])) {
+                rows.push(
+                  <tr
+                    key={`group-${position.walletAddress}-${position.accountCode}-${index}`}
+                    className="border-t border-slate-200 bg-slate-50/70"
+                  >
+                    <td className="px-4 py-2 text-xs font-semibold text-slate-600" colSpan={5}>
+                      계정 그룹: {position.accountCode}
+                    </td>
+                  </tr>
+                );
+              }
+
+              rows.push(
+                <tr
+                  key={`position-${position.walletAddress}-${position.accountCode}-${position.tokenSymbol}-${index}`}
+                  className="border-t border-slate-100"
+                >
+                  <td className="px-4 py-3 font-mono text-xs text-slate-600">{position.walletAddress}</td>
+                  <td className="px-4 py-3">{position.tokenSymbol}</td>
+                  <td className="px-4 py-3">{position.accountCode}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-800">{position.quantity}</td>
+                  <td className="px-4 py-3 text-slate-600">{formatDateTime(position.lastEntryDate)}</td>
+                </tr>
+              );
+
+              return rows;
+            })}
             {dashboard.positions.length === 0 && (
               <tr>
                 <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
@@ -136,4 +157,12 @@ function formatDateTime(value: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('ko-KR', { hour12: false });
+}
+
+function isNewAccountGroup(
+  current: BalanceDashboard['positions'][number],
+  previous?: BalanceDashboard['positions'][number]
+): boolean {
+  if (!previous) return true;
+  return previous.walletAddress !== current.walletAddress || previous.accountCode !== current.accountCode;
 }

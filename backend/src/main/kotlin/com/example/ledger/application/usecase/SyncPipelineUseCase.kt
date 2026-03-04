@@ -1,6 +1,7 @@
 package com.example.ledger.application.usecase
 
 import com.example.ledger.domain.model.AccountingEvent
+import com.example.ledger.domain.model.EventType
 import com.example.ledger.domain.model.PriceSource
 import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.model.SyncStatus
@@ -21,10 +22,15 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
+
+private const val NATIVE_ETH_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
+private const val TOKEN_SYMBOL_MAX_LENGTH = 20
 
 @Service
 class SyncPipelineUseCase(
@@ -84,7 +90,8 @@ class SyncPipelineUseCase(
 
                 val decoded = transactionDecoder.decode(rawTx)
                 val classified = classificationService.classify(decoded)
-                val enriched = classified.map { enrichPrice(it, rawTx.blockTimestamp) }
+                val normalized = normalizeTokenEvents(classified, rawTx.blockNumber)
+                val enriched = normalized.map { enrichPrice(it, rawTx.blockTimestamp) }
                 val savedEvents = accountingEventRepository.saveAll(enriched)
 
                 ledgerService.generateEntries(
@@ -162,7 +169,8 @@ class SyncPipelineUseCase(
 
                 val decoded = transactionDecoder.decode(rawTx)
                 val classified = classificationService.classify(decoded)
-                val savedEvents = accountingEventRepository.saveAll(classified)
+                val normalized = normalizeTokenEvents(classified, rawTx.blockNumber)
+                val savedEvents = accountingEventRepository.saveAll(normalized)
                 ledgerService.generateBalanceFlowDeltaEntries(
                     rawTransactionId = rawTx.id ?: return@forEach,
                     events = savedEvents,
@@ -209,6 +217,107 @@ class SyncPipelineUseCase(
             priceKrw = priceInfo.priceKrw,
             priceSource = priceInfo.source.takeIf { it != PriceSource.UNKNOWN } ?: PriceSource.UNKNOWN
         )
+    }
+
+    private fun normalizeTokenEvents(events: List<AccountingEvent>, blockNumber: Long): List<AccountingEvent> {
+        return events.map { event -> normalizeTokenEvent(event, blockNumber) }
+    }
+
+    private fun normalizeTokenEvent(event: AccountingEvent, blockNumber: Long): AccountingEvent {
+        val normalizedMetadata = if (event.eventType == EventType.SWAP) {
+            normalizeSwapMetadata(event.metadata, blockNumber)
+        } else {
+            event.metadata
+        }
+
+        val tokenAddress = event.tokenAddress
+        if (tokenAddress.isNullOrBlank()) {
+            val normalizedSymbol = if (event.tokenSymbol?.equals("ETH", ignoreCase = true) == true) {
+                "ETH"
+            } else {
+                normalizeTokenSymbol(event.tokenSymbol) ?: event.tokenSymbol
+            }
+            return event.copy(tokenSymbol = normalizedSymbol, metadata = normalizedMetadata)
+        }
+        if (tokenAddress.equals(NATIVE_ETH_TOKEN_ADDRESS, ignoreCase = true)) {
+            return event.copy(tokenSymbol = "ETH", metadata = normalizedMetadata)
+        }
+
+        val normalizedSymbol = normalizeTokenSymbol(blockchainDataPort.getTokenSymbol(tokenAddress, blockNumber))
+            ?: normalizeTokenSymbol(event.tokenSymbol)
+            ?: event.tokenSymbol
+
+        val decimals = blockchainDataPort.getTokenDecimals(tokenAddress, blockNumber)
+        val normalizedAmountDecimal = normalizeAmountDecimal(event, decimals)
+
+        return event.copy(
+            tokenSymbol = normalizedSymbol,
+            amountDecimal = normalizedAmountDecimal,
+            metadata = normalizedMetadata
+        )
+    }
+
+    private fun normalizeAmountDecimal(event: AccountingEvent, decimals: Int?): BigDecimal {
+        if (decimals == null || decimals < 0) return event.amountDecimal
+
+        val rawAsDecimal = event.amountRaw.toBigDecimal()
+        if (event.amountDecimal.compareTo(rawAsDecimal) != 0) {
+            return event.amountDecimal
+        }
+
+        return rawAsDecimal.movePointLeft(decimals)
+    }
+
+    private fun normalizeSwapMetadata(metadata: Map<String, Any?>, blockNumber: Long): Map<String, Any?> {
+        val tokenOutAddress = metadata["tokenOutAddress"]?.toString()?.takeIf { it.isNotBlank() } ?: return metadata
+
+        val normalized = metadata.toMutableMap()
+        val normalizedOutSymbol = normalizeTokenSymbol(blockchainDataPort.getTokenSymbol(tokenOutAddress, blockNumber))
+            ?: normalizeTokenSymbol(metadata["tokenOutSymbol"]?.toString())
+        if (normalizedOutSymbol != null) {
+            normalized["tokenOutSymbol"] = normalizedOutSymbol
+        }
+
+        val decimals = blockchainDataPort.getTokenDecimals(tokenOutAddress, blockNumber)
+        val normalizedOutAmount = normalizeMetadataAmount(metadata["amountOut"], decimals)
+        if (normalizedOutAmount != null) {
+            normalized["amountOut"] = normalizedOutAmount
+        }
+
+        return normalized
+    }
+
+    private fun normalizeMetadataAmount(value: Any?, decimals: Int?): BigDecimal? {
+        val parsed = value.toBigDecimalOrNull() ?: return null
+        if (decimals == null || decimals < 0) return parsed
+        if (!isIntegerValue(parsed)) return parsed
+        return parsed.movePointLeft(decimals)
+    }
+
+    private fun normalizeTokenSymbol(symbol: String?): String? {
+        return symbol
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.take(TOKEN_SYMBOL_MAX_LENGTH)
+            ?.uppercase()
+    }
+
+    private fun Any?.toBigDecimalOrNull(): BigDecimal? {
+        return when (this) {
+            null -> null
+            is BigDecimal -> this
+            is BigInteger -> this.toBigDecimal()
+            is Int -> BigDecimal.valueOf(toLong())
+            is Long -> BigDecimal.valueOf(this)
+            is Float -> toBigDecimal()
+            is Double -> toBigDecimal()
+            is String -> toBigDecimalOrNull()
+            else -> toString().toBigDecimalOrNull()
+        }
+    }
+
+    private fun isIntegerValue(value: BigDecimal): Boolean {
+        return value.stripTrailingZeros().scale() <= 0
     }
 
     private fun ensureCutoffOpeningEntries(wallet: Wallet, snapshotsOverride: List<com.example.ledger.domain.model.WalletBalanceSnapshot>? = null) {

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 private const val NATIVE_ETH_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
+private const val TOKEN_SYMBOL_MAX_LENGTH = 20
 
 @Service
 class CutoffSnapshotService(
@@ -31,10 +32,16 @@ class CutoffSnapshotService(
         )
 
         wallet.trackedTokens.forEach { tokenAddress ->
+            val resolvedSymbol = blockchainDataPort.getTokenSymbol(tokenAddress, cutoffBlock)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.take(TOKEN_SYMBOL_MAX_LENGTH)
+                ?.uppercase()
+                ?: "ERC20"
             snapshots += WalletBalanceSnapshot(
                 walletId = walletId,
                 tokenAddress = tokenAddress,
-                tokenSymbol = "ERC20",
+                tokenSymbol = resolvedSymbol,
                 balanceRaw = blockchainDataPort.getTokenBalanceAtBlock(wallet.address, tokenAddress, cutoffBlock),
                 cutoffBlock = cutoffBlock
             )

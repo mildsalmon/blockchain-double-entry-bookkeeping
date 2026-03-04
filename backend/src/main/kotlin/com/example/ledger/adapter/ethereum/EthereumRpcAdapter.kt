@@ -16,8 +16,10 @@ import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClientResponseException
 import java.math.BigInteger
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 private const val BLOCK_CHUNK_SIZE = 10_000L
+private const val TOKEN_SYMBOL_MAX_LENGTH = 20
 
 private const val TOPIC_ERC20_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 private const val TOPIC_ERC1155_TRANSFER_SINGLE = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
@@ -31,6 +33,8 @@ class EthereumRpcAdapter(
 ) : BlockchainDataPort {
 
     private val log = LoggerFactory.getLogger(EthereumRpcAdapter::class.java)
+    private val tokenSymbolCache = ConcurrentHashMap<String, String>()
+    private val tokenDecimalsCache = ConcurrentHashMap<String, Int>()
 
     override fun fetchTransactions(walletAddress: String, fromBlock: Long?): List<RawTransaction> {
         val latestBlock = retryExecutor.execute { rpcClient.getBlockNumber() }
@@ -61,6 +65,35 @@ class EthereumRpcAdapter(
 
     override fun getTokenBalanceAtBlock(walletAddress: String, tokenAddress: String, blockNumber: Long): BigInteger {
         return retryExecutor.execute { rpcClient.getTokenBalanceAtBlock(walletAddress, tokenAddress, blockNumber) }
+    }
+
+    override fun getTokenSymbol(tokenAddress: String, blockNumber: Long?): String? {
+        val normalizedAddress = normalizeTokenAddress(tokenAddress) ?: return null
+        val cacheKey = metadataCacheKey(normalizedAddress, blockNumber)
+        tokenSymbolCache[cacheKey]?.let { return it }
+
+        val symbol = retryExecutor.execute { rpcClient.getTokenSymbol(normalizedAddress, blockNumber) }
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.take(TOKEN_SYMBOL_MAX_LENGTH)
+            ?.uppercase()
+            ?: return null
+
+        tokenSymbolCache[cacheKey] = symbol
+        return symbol
+    }
+
+    override fun getTokenDecimals(tokenAddress: String, blockNumber: Long?): Int? {
+        val normalizedAddress = normalizeTokenAddress(tokenAddress) ?: return null
+        val cacheKey = metadataCacheKey(normalizedAddress, blockNumber)
+        tokenDecimalsCache[cacheKey]?.let { return it }
+
+        val decimals = retryExecutor.execute { rpcClient.getTokenDecimals(normalizedAddress, blockNumber) }
+            ?.takeIf { it in 0..255 }
+            ?: return null
+
+        tokenDecimalsCache[cacheKey] = decimals
+        return decimals
     }
 
     private fun blockChunks(fromBlock: Long, toBlock: Long): List<Pair<Long, Long>> {
@@ -171,7 +204,7 @@ class EthereumRpcAdapter(
 
             val rawData = objectMapper.createObjectNode().apply {
                 set<com.fasterxml.jackson.databind.node.ObjectNode>("transaction", buildTransactionNode(tx, receipt))
-                set<com.fasterxml.jackson.databind.node.ObjectNode>("receipt", buildReceiptNode(receipt))
+                set<com.fasterxml.jackson.databind.node.ObjectNode>("receipt", buildReceiptNode(receipt, blockNumber))
             }
 
             results.add(
@@ -209,7 +242,7 @@ class EthereumRpcAdapter(
         }
     }
 
-    private fun buildReceiptNode(receipt: TransactionReceiptResponse): com.fasterxml.jackson.databind.node.ObjectNode {
+    private fun buildReceiptNode(receipt: TransactionReceiptResponse, blockNumber: Long): com.fasterxml.jackson.databind.node.ObjectNode {
         return objectMapper.createObjectNode().apply {
             put("transactionHash", receipt.transactionHash)
             put("blockNumber", receipt.blockNumber)
@@ -221,11 +254,45 @@ class EthereumRpcAdapter(
             put("gasUsed", receipt.gasUsed)
             put("effectiveGasPrice", receipt.effectiveGasPrice)
             put("contractAddress", receipt.contractAddress)
-            set<com.fasterxml.jackson.databind.node.ArrayNode>(
-                "logs",
-                objectMapper.valueToTree(receipt.logs ?: emptyList<LogEntry>())
-            )
+            set<com.fasterxml.jackson.databind.node.ArrayNode>("logs", buildLogsNode(receipt.logs.orEmpty(), blockNumber))
         }
+    }
+
+    private fun buildLogsNode(logs: List<LogEntry>, blockNumber: Long): com.fasterxml.jackson.databind.node.ArrayNode {
+        return objectMapper.createArrayNode().apply {
+            logs.forEach { logEntry ->
+                val logNode = objectMapper.valueToTree<com.fasterxml.jackson.databind.node.ObjectNode>(logEntry)
+                if (isErc20TransferLog(logEntry)) {
+                    val tokenAddress = logEntry.address
+                    if (!tokenAddress.isNullOrBlank()) {
+                        getTokenSymbol(tokenAddress, blockNumber)?.let { symbol ->
+                            logNode.put("tokenSymbol", symbol)
+                        }
+                        getTokenDecimals(tokenAddress, blockNumber)?.let { decimals ->
+                            logNode.put("tokenDecimals", decimals)
+                        }
+                    }
+                }
+                add(logNode)
+            }
+        }
+    }
+
+    private fun normalizeTokenAddress(tokenAddress: String?): String? {
+        if (tokenAddress.isNullOrBlank()) return null
+        val clean = tokenAddress.removePrefix("0x").lowercase()
+        if (clean.length != 40) return null
+        return "0x$clean"
+    }
+
+    private fun isErc20TransferLog(logEntry: LogEntry): Boolean {
+        val firstTopic = logEntry.topics.firstOrNull() ?: return false
+        return firstTopic.equals(TOPIC_ERC20_TRANSFER, ignoreCase = true)
+    }
+
+    private fun metadataCacheKey(normalizedAddress: String, blockNumber: Long?): String {
+        val block = blockNumber?.toString() ?: "latest"
+        return "$normalizedAddress@$block"
     }
 }
 
