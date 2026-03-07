@@ -6,6 +6,7 @@ import com.example.ledger.domain.model.Wallet
 import com.example.ledger.domain.model.WalletSyncMode
 import com.example.ledger.domain.model.WalletSyncPhase
 import com.example.ledger.domain.port.BlockchainDataPort
+import com.example.ledger.domain.port.JournalRepository
 import com.example.ledger.domain.port.WalletBalanceSnapshotRepository
 import com.example.ledger.domain.port.WalletRepository
 import org.junit.jupiter.api.Test
@@ -13,10 +14,12 @@ import org.mockito.kotlin.eq
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.mock.mockito.MockBean
+import java.math.BigDecimal
 import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 private const val NATIVE_ETH_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
 
@@ -30,6 +33,9 @@ class CutoffSnapshotIntegrationTest : IntegrationTestBase() {
 
     @Autowired
     private lateinit var syncPipelineUseCase: SyncPipelineUseCase
+
+    @Autowired
+    private lateinit var journalRepository: JournalRepository
 
     @MockBean
     private lateinit var blockchainDataPort: BlockchainDataPort
@@ -96,5 +102,39 @@ class CutoffSnapshotIntegrationTest : IntegrationTestBase() {
         assertNotNull(savedWallet)
         assertEquals(SyncStatus.FAILED, savedWallet.syncStatus)
         assertEquals(WalletSyncPhase.FAILED, savedWallet.syncPhase)
+    }
+
+    @Test
+    fun `cutoff opening entries use on-chain symbol and decimals`() {
+        val address = "0x3333333333333333333333333333333333333333"
+        val token = "0x9999999999999999999999999999999999999999"
+        val cutoffBlock = 300L
+        val wallet = walletRepository.save(
+            Wallet(
+                address = address,
+                syncMode = WalletSyncMode.BALANCE_FLOW_CUTOFF,
+                syncPhase = WalletSyncPhase.SNAPSHOT_PENDING,
+                cutoffBlock = cutoffBlock,
+                trackedTokens = listOf(token)
+            )
+        )
+
+        whenever(blockchainDataPort.getNativeBalanceAtBlock(eq(address), eq(cutoffBlock))).thenReturn(BigInteger.ZERO)
+        whenever(blockchainDataPort.getTokenBalanceAtBlock(eq(address), eq(token), eq(cutoffBlock))).thenReturn(BigInteger("1234500"))
+        whenever(blockchainDataPort.getTokenSymbol(eq(token), eq(cutoffBlock))).thenReturn("USDC")
+        whenever(blockchainDataPort.getTokenDecimals(eq(token), eq(cutoffBlock))).thenReturn(6)
+        whenever(blockchainDataPort.fetchTransactions(eq(address), eq(cutoffBlock + 1))).thenReturn(emptyList())
+
+        syncPipelineUseCase.sync(address)
+
+        val snapshots = walletBalanceSnapshotRepository.findByWalletId(requireNotNull(wallet.id))
+        val tokenSnapshot = snapshots.first { it.tokenAddress.equals(token, ignoreCase = true) }
+        assertEquals("USDC", tokenSnapshot.tokenSymbol)
+
+        val journals = journalRepository.findByFilters(size = 100)
+        val opening = journals.first { it.description == "Cutoff opening balance USDC" }
+        val assetLine = opening.lines.first { it.accountCode == "자산:암호화폐:ERC20:USDC" }
+        val tokenQuantity = requireNotNull(assetLine.tokenQuantity)
+        assertTrue(tokenQuantity.compareTo(BigDecimal("1.2345")) == 0)
     }
 }

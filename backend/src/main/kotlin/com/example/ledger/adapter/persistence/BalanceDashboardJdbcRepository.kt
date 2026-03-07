@@ -66,7 +66,7 @@ class BalanceDashboardJdbcRepository(
                   ELSE jl.token_quantity
                 END
             ) <> 0
-            ORDER BY rt.wallet_address ASC, token_symbol ASC, jl.account_code ASC
+            ORDER BY rt.wallet_address ASC, jl.account_code ASC, token_symbol ASC
             """.trimIndent()
 
         return jdbcTemplate.query(sql, params) { rs, _ ->
