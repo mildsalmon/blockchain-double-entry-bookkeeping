@@ -91,6 +91,8 @@ class JournalJpaRepository(
         debitAmount = debitAmount,
         creditAmount = creditAmount,
         tokenSymbol = tokenSymbol,
+        chain = chain,
+        tokenAddress = tokenAddress,
         tokenQuantity = tokenQuantity,
         createdAt = createdAt
     )
@@ -101,6 +103,8 @@ class JournalJpaRepository(
         debitAmount = debitAmount,
         creditAmount = creditAmount,
         tokenSymbol = tokenSymbol,
+        chain = chain,
+        tokenAddress = tokenAddress,
         tokenQuantity = tokenQuantity,
         createdAt = createdAt
     )

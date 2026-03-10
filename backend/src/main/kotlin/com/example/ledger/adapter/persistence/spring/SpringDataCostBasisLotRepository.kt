@@ -9,4 +9,17 @@ interface SpringDataCostBasisLotRepository : JpaRepository<CostBasisLotEntity, L
         tokenSymbol: String,
         remainingQty: java.math.BigDecimal
     ): List<CostBasisLotEntity>
+
+    fun findByWalletAddressAndTokenSymbolAndChainIsNullAndTokenAddressIsNullAndRemainingQtyGreaterThanOrderByAcquisitionDateAsc(
+        walletAddress: String,
+        tokenSymbol: String,
+        remainingQty: java.math.BigDecimal
+    ): List<CostBasisLotEntity>
+
+    fun findByWalletAddressAndChainAndTokenAddressAndRemainingQtyGreaterThanOrderByAcquisitionDateAsc(
+        walletAddress: String,
+        chain: String,
+        tokenAddress: String,
+        remainingQty: java.math.BigDecimal
+    ): List<CostBasisLotEntity>
 }

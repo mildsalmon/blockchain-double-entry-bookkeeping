@@ -6,6 +6,10 @@ data class BalancePositionResponse(
     val walletAddress: String,
     val accountCode: String,
     val tokenSymbol: String,
+    val chain: String?,
+    val chainLabel: String,
+    val tokenAddress: String?,
+    val displayLabel: String,
     val quantity: String,
     val lastEntryDate: Instant
 )

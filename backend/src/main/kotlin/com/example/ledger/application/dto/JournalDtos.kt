@@ -3,6 +3,9 @@ package com.example.ledger.application.dto
 import com.example.ledger.domain.model.EventType
 import com.example.ledger.domain.model.JournalStatus
 import com.example.ledger.domain.model.PriceSource
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Pattern
+import jakarta.validation.constraints.Positive
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -12,6 +15,8 @@ data class JournalLineRequest(
     val debitAmount: BigDecimal,
     val creditAmount: BigDecimal,
     val tokenSymbol: String? = null,
+    val chain: String? = null,
+    val tokenAddress: String? = null,
     val tokenQuantity: BigDecimal? = null
 )
 
@@ -26,8 +31,11 @@ data class BulkApproveRequest(
 
 data class ManualClassifyRequest(
     val eventType: EventType,
+    @field:NotBlank
     val tokenSymbol: String,
+    @field:Positive
     val amountDecimal: BigDecimal,
+    @field:Pattern(regexp = "^0x[a-fA-F0-9]{40}$", message = "tokenAddress must be a 0x-prefixed 40-hex contract address")
     val tokenAddress: String? = null
 )
 
@@ -37,6 +45,10 @@ data class JournalLineResponse(
     val debitAmount: BigDecimal,
     val creditAmount: BigDecimal,
     val tokenSymbol: String?,
+    val chain: String?,
+    val chainLabel: String,
+    val tokenAddress: String?,
+    val displayLabel: String?,
     val tokenQuantity: BigDecimal?
 )
 

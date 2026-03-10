@@ -7,6 +7,8 @@ data class CostBasisLot(
     val id: Long? = null,
     val walletAddress: String,
     val tokenSymbol: String,
+    val chain: String? = null,
+    val tokenAddress: String? = null,
     val acquisitionDate: Instant,
     val quantity: BigDecimal,
     val remainingQuantity: BigDecimal,

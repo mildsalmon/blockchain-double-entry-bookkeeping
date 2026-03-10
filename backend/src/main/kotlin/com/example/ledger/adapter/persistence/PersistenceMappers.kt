@@ -5,6 +5,7 @@ import com.example.ledger.adapter.persistence.entity.AccountingEventEntity
 import com.example.ledger.adapter.persistence.entity.CostBasisLotEntity
 import com.example.ledger.adapter.persistence.entity.PriceCacheEntity
 import com.example.ledger.adapter.persistence.entity.RawTransactionEntity
+import com.example.ledger.adapter.persistence.entity.TokenMetadataEntity
 import com.example.ledger.adapter.persistence.entity.WalletBalanceSnapshotEntity
 import com.example.ledger.adapter.persistence.entity.WalletEntity
 import com.example.ledger.domain.model.Account
@@ -16,6 +17,7 @@ import com.example.ledger.domain.model.PriceInfo
 import com.example.ledger.domain.model.PriceSource
 import com.example.ledger.domain.model.RawTransaction
 import com.example.ledger.domain.model.SyncStatus
+import com.example.ledger.domain.model.TokenMetadata
 import com.example.ledger.domain.model.WalletBalanceSnapshot
 import com.example.ledger.domain.model.Wallet
 import com.example.ledger.domain.model.WalletSyncMode
@@ -141,6 +143,8 @@ internal fun CostBasisLotEntity.toDomain(): CostBasisLot = CostBasisLot(
     id = id,
     walletAddress = walletAddress,
     tokenSymbol = tokenSymbol,
+    chain = chain,
+    tokenAddress = tokenAddress,
     acquisitionDate = acquisitionDate,
     quantity = quantity,
     remainingQuantity = remainingQty,
@@ -154,6 +158,8 @@ internal fun CostBasisLot.toEntity(): CostBasisLotEntity = CostBasisLotEntity(
     id = id,
     walletAddress = walletAddress,
     tokenSymbol = tokenSymbol,
+    chain = chain,
+    tokenAddress = tokenAddress,
     acquisitionDate = acquisitionDate,
     quantity = quantity,
     remainingQty = remainingQuantity,
@@ -197,6 +203,26 @@ internal fun WalletBalanceSnapshot.toEntity(): WalletBalanceSnapshotEntity = Wal
     tokenSymbol = tokenSymbol,
     balanceRaw = balanceRaw.toBigDecimal(),
     cutoffBlock = cutoffBlock,
+    createdAt = createdAt,
+    updatedAt = updatedAt
+)
+
+internal fun TokenMetadataEntity.toDomain(): TokenMetadata = TokenMetadata(
+    id = id,
+    chain = chain,
+    tokenAddress = tokenAddress,
+    symbol = symbol,
+    lastVerifiedAt = lastVerifiedAt,
+    createdAt = createdAt,
+    updatedAt = updatedAt
+)
+
+internal fun TokenMetadata.toEntity(): TokenMetadataEntity = TokenMetadataEntity(
+    id = id,
+    chain = chain,
+    tokenAddress = tokenAddress,
+    symbol = symbol,
+    lastVerifiedAt = lastVerifiedAt,
     createdAt = createdAt,
     updatedAt = updatedAt
 )

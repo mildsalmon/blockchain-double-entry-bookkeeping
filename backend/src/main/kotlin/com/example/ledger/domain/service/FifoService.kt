@@ -31,6 +31,8 @@ class FifoService(
     fun addLot(
         walletAddress: String,
         tokenSymbol: String,
+        chain: String? = null,
+        tokenAddress: String? = null,
         quantity: BigDecimal,
         unitCostKrw: BigDecimal,
         rawTransactionId: Long?,
@@ -40,6 +42,8 @@ class FifoService(
             CostBasisLot(
                 walletAddress = walletAddress,
                 tokenSymbol = tokenSymbol,
+                chain = chain,
+                tokenAddress = tokenAddress,
                 acquisitionDate = acquisitionDate,
                 quantity = quantity,
                 remainingQuantity = quantity,
@@ -58,12 +62,14 @@ class FifoService(
     fun consume(
         walletAddress: String,
         tokenSymbol: String,
-        quantity: BigDecimal
+        quantity: BigDecimal,
+        chain: String? = null,
+        tokenAddress: String? = null
     ): ConsumptionResult {
         var remaining = quantity
         var totalCost = BigDecimal.ZERO
 
-        val openLots = costBasisLotRepository.findOpenLots(walletAddress, tokenSymbol)
+        val openLots = costBasisLotRepository.findOpenLots(walletAddress, tokenSymbol, chain, tokenAddress)
         val updatedLots = mutableListOf<CostBasisLot>()
 
         for (lot in openLots) {
@@ -95,11 +101,13 @@ class FifoService(
         ex: CannotSerializeTransactionException,
         walletAddress: String,
         tokenSymbol: String,
-        quantity: BigDecimal
+        quantity: BigDecimal,
+        chain: String? = null,
+        tokenAddress: String? = null
     ): ConsumptionResult {
         logger.error(
-            "FIFO consume retries exhausted due to serialization failures. walletAddress={}, tokenSymbol={}, quantity={}",
-            walletAddress, tokenSymbol, quantity, ex
+            "FIFO consume retries exhausted due to serialization failures. walletAddress={}, tokenSymbol={}, chain={}, tokenAddress={}, quantity={}",
+            walletAddress, tokenSymbol, chain, tokenAddress, quantity, ex
         )
         throw ex
     }
@@ -109,11 +117,13 @@ class FifoService(
         ex: CannotAcquireLockException,
         walletAddress: String,
         tokenSymbol: String,
-        quantity: BigDecimal
+        quantity: BigDecimal,
+        chain: String? = null,
+        tokenAddress: String? = null
     ): ConsumptionResult {
         logger.error(
-            "FIFO consume retries exhausted due to lock failures. walletAddress={}, tokenSymbol={}, quantity={}",
-            walletAddress, tokenSymbol, quantity, ex
+            "FIFO consume retries exhausted due to lock failures. walletAddress={}, tokenSymbol={}, chain={}, tokenAddress={}, quantity={}",
+            walletAddress, tokenSymbol, chain, tokenAddress, quantity, ex
         )
         throw ex
     }

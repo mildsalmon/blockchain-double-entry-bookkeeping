@@ -120,6 +120,62 @@ class JournalEntryTest {
         }
     }
 
+    @Test
+    fun `cannot change token chain or address when updating journal`() {
+        val entry = JournalEntry(
+            rawTransactionId = 1L,
+            entryDate = Instant.parse("2026-02-22T00:00:00Z"),
+            description = "토큰 주소 검증",
+            status = JournalStatus.REVIEW_REQUIRED,
+            lines = listOf(
+                JournalLine(
+                    accountCode = "자산:암호화폐:ERC20:USDC@0x1111111111111111111111111111111111111111",
+                    debitAmount = BigDecimal("1000"),
+                    creditAmount = BigDecimal.ZERO,
+                    tokenSymbol = "USDC",
+                    chain = "ETHEREUM",
+                    tokenAddress = "0x1111111111111111111111111111111111111111",
+                    tokenQuantity = BigDecimal("1.0")
+                ),
+                JournalLine(
+                    accountCode = "자산:외부",
+                    debitAmount = BigDecimal.ZERO,
+                    creditAmount = BigDecimal("1000"),
+                    tokenSymbol = "USDC",
+                    chain = "ETHEREUM",
+                    tokenAddress = "0x1111111111111111111111111111111111111111",
+                    tokenQuantity = BigDecimal("1.0")
+                )
+            )
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            entry.update(
+                lines = listOf(
+                    JournalLine(
+                        accountCode = "자산:암호화폐:ERC20:USDC@0x2222222222222222222222222222222222222222",
+                        debitAmount = BigDecimal("1000"),
+                        creditAmount = BigDecimal.ZERO,
+                        tokenSymbol = "USDC",
+                        chain = "ethereum",
+                        tokenAddress = "0x2222222222222222222222222222222222222222",
+                        tokenQuantity = BigDecimal("1.0")
+                    ),
+                    JournalLine(
+                        accountCode = "자산:외부",
+                        debitAmount = BigDecimal.ZERO,
+                        creditAmount = BigDecimal("1000"),
+                        tokenSymbol = "USDC",
+                        chain = "ETHEREUM",
+                        tokenAddress = "0x1111111111111111111111111111111111111111",
+                        tokenQuantity = BigDecimal("1.0")
+                    )
+                ),
+                memo = "토큰 주소 변경 시도"
+            )
+        }
+    }
+
     private fun validEntry(status: JournalStatus): JournalEntry {
         return JournalEntry(
             id = null,

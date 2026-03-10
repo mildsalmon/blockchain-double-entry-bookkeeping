@@ -3,9 +3,14 @@
 import { useState } from 'react';
 import type { Journal } from '@/types/journal';
 
+type JournalLineUpdatePayload = Pick<
+  Journal['lines'][number],
+  'accountCode' | 'debitAmount' | 'creditAmount' | 'tokenSymbol' | 'chain' | 'tokenAddress' | 'tokenQuantity'
+>;
+
 interface JournalEditFormProps {
   journal: Journal;
-  onSave: (payload: { lines: any[]; memo: string }) => Promise<void>;
+  onSave: (payload: { lines: JournalLineUpdatePayload[]; memo: string }) => Promise<void>;
 }
 
 export function JournalEditForm({ journal, onSave }: JournalEditFormProps) {
@@ -16,7 +21,18 @@ export function JournalEditForm({ journal, onSave }: JournalEditFormProps) {
     event.preventDefault();
     setSaving(true);
     try {
-      await onSave({ lines: journal.lines, memo });
+      await onSave({
+        lines: journal.lines.map(({ accountCode, debitAmount, creditAmount, tokenSymbol, chain, tokenAddress, tokenQuantity }) => ({
+          accountCode,
+          debitAmount,
+          creditAmount,
+          tokenSymbol,
+          chain,
+          tokenAddress,
+          tokenQuantity
+        })),
+        memo
+      });
     } finally {
       setSaving(false);
     }

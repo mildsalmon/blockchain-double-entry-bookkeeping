@@ -18,6 +18,7 @@ import com.example.ledger.domain.port.WalletBalanceSnapshotRepository
 import com.example.ledger.domain.port.WalletRepository
 import com.example.ledger.domain.service.ClassificationService
 import com.example.ledger.domain.service.LedgerService
+import com.example.ledger.domain.service.TokenMetadataService
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
@@ -30,7 +31,6 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 private const val NATIVE_ETH_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
-private const val TOKEN_SYMBOL_MAX_LENGTH = 20
 
 @Service
 class SyncPipelineUseCase(
@@ -44,7 +44,8 @@ class SyncPipelineUseCase(
     private val journalRepository: JournalRepository,
     private val pricePort: PricePort,
     private val ledgerService: LedgerService,
-    private val cutoffSnapshotService: CutoffSnapshotService
+    private val cutoffSnapshotService: CutoffSnapshotService,
+    private val tokenMetadataService: TokenMetadataService
 ) {
     private val logger = LoggerFactory.getLogger(SyncPipelineUseCase::class.java)
 
@@ -235,7 +236,7 @@ class SyncPipelineUseCase(
             val normalizedSymbol = if (event.tokenSymbol?.equals("ETH", ignoreCase = true) == true) {
                 "ETH"
             } else {
-                normalizeTokenSymbol(event.tokenSymbol) ?: event.tokenSymbol
+                tokenMetadataService.normalizeSymbol(event.tokenSymbol) ?: event.tokenSymbol
             }
             return event.copy(tokenSymbol = normalizedSymbol, metadata = normalizedMetadata)
         }
@@ -243,9 +244,7 @@ class SyncPipelineUseCase(
             return event.copy(tokenSymbol = "ETH", metadata = normalizedMetadata)
         }
 
-        val normalizedSymbol = normalizeTokenSymbol(blockchainDataPort.getTokenSymbol(tokenAddress, blockNumber))
-            ?: normalizeTokenSymbol(event.tokenSymbol)
-            ?: event.tokenSymbol
+        val normalizedSymbol = tokenMetadataService.resolveForWrite(tokenAddress, event.tokenSymbol, blockNumber).tokenSymbol
 
         val decimals = blockchainDataPort.getTokenDecimals(tokenAddress, blockNumber)
         val normalizedAmountDecimal = normalizeAmountDecimal(event, decimals)
@@ -272,11 +271,11 @@ class SyncPipelineUseCase(
         val tokenOutAddress = metadata["tokenOutAddress"]?.toString()?.takeIf { it.isNotBlank() } ?: return metadata
 
         val normalized = metadata.toMutableMap()
-        val normalizedOutSymbol = normalizeTokenSymbol(blockchainDataPort.getTokenSymbol(tokenOutAddress, blockNumber))
-            ?: normalizeTokenSymbol(metadata["tokenOutSymbol"]?.toString())
-        if (normalizedOutSymbol != null) {
-            normalized["tokenOutSymbol"] = normalizedOutSymbol
-        }
+        normalized["tokenOutSymbol"] = tokenMetadataService.resolveForWrite(
+            tokenOutAddress,
+            metadata["tokenOutSymbol"]?.toString(),
+            blockNumber
+        ).tokenSymbol
 
         val decimals = blockchainDataPort.getTokenDecimals(tokenOutAddress, blockNumber)
         val normalizedOutAmount = normalizeMetadataAmount(metadata["amountOut"], decimals)
@@ -292,14 +291,6 @@ class SyncPipelineUseCase(
         if (decimals == null || decimals < 0) return parsed
         if (!isIntegerValue(parsed)) return parsed
         return parsed.movePointLeft(decimals)
-    }
-
-    private fun normalizeTokenSymbol(symbol: String?): String? {
-        return symbol
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?.take(TOKEN_SYMBOL_MAX_LENGTH)
-            ?.uppercase()
     }
 
     private fun Any?.toBigDecimalOrNull(): BigDecimal? {

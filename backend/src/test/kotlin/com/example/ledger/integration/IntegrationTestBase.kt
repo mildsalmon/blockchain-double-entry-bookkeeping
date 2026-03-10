@@ -26,6 +26,7 @@ abstract class IntegrationTestBase {
               accounting_events,
               raw_transactions,
               cost_basis_lots,
+              token_metadata,
               wallet_balance_snapshots,
               wallet_tracked_tokens,
               wallets,

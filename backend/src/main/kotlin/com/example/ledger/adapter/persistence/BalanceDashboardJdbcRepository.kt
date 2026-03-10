@@ -40,6 +40,8 @@ class BalanceDashboardJdbcRepository(
               rt.wallet_address,
               jl.account_code,
               COALESCE(NULLIF(jl.token_symbol, ''), 'UNKNOWN') AS token_symbol,
+              jl.chain,
+              jl.token_address,
               SUM(
                 CASE
                   WHEN jl.token_quantity IS NULL THEN 0
@@ -56,7 +58,12 @@ class BalanceDashboardJdbcRepository(
             WHERE jl.token_quantity IS NOT NULL
               AND jl.account_code LIKE '자산:암호화폐:%'
               $whereSql
-            GROUP BY rt.wallet_address, jl.account_code, COALESCE(NULLIF(jl.token_symbol, ''), 'UNKNOWN')
+            GROUP BY
+              rt.wallet_address,
+              jl.account_code,
+              COALESCE(NULLIF(jl.token_symbol, ''), 'UNKNOWN'),
+              jl.chain,
+              jl.token_address
             HAVING SUM(
                 CASE
                   WHEN jl.token_quantity IS NULL THEN 0
@@ -74,6 +81,8 @@ class BalanceDashboardJdbcRepository(
                 walletAddress = rs.getString("wallet_address"),
                 accountCode = rs.getString("account_code"),
                 tokenSymbol = rs.getString("token_symbol"),
+                chain = rs.getString("chain"),
+                tokenAddress = rs.getString("token_address"),
                 quantity = rs.getBigDecimal("quantity") ?: BigDecimal.ZERO,
                 lastEntryDate = (rs.getObject("last_entry_date") as Timestamp).toInstant()
             )

@@ -133,7 +133,7 @@ class CutoffSnapshotIntegrationTest : IntegrationTestBase() {
 
         val journals = journalRepository.findByFilters(size = 100)
         val opening = journals.first { it.description == "Cutoff opening balance USDC" }
-        val assetLine = opening.lines.first { it.accountCode == "자산:암호화폐:ERC20:USDC" }
+        val assetLine = opening.lines.first { it.accountCode == "자산:암호화폐:ERC20:USDC@$token" }
         val tokenQuantity = requireNotNull(assetLine.tokenQuantity)
         assertTrue(tokenQuantity.compareTo(BigDecimal("1.2345")) == 0)
     }
