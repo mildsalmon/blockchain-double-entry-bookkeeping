@@ -246,6 +246,9 @@ export function WalletInput({ onSubmit }: WalletInputProps) {
           <p className="mt-2 text-xs text-slate-500">
             중복 주소는 자동으로 제거됩니다. cutoff 시점에 이미 들고 있었지만 여기서 빠진 토큰은 자동으로 복구되지 않습니다.
           </p>
+          <p className="mt-2 text-xs text-slate-500">
+            누락이 뒤늦게 확인되면 현재 정책은 `re-onboarding only` 입니다. close 이후 발견 건은 운영자가 직접 수정하지 않고 approval flow 로 넘겨야 합니다.
+          </p>
         </>
       )}
 

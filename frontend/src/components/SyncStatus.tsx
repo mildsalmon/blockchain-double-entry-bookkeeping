@@ -85,6 +85,7 @@ export function SyncStatus({ wallets, onRetry, onDelete, busyActionKey }: SyncSt
                     emptyText="아직 자동 발견된 토큰이 없습니다."
                   />
                   <OmittedSection items={wallet.omittedSuspectedTokens} />
+                  <CorrectionPolicySection hasOmittedCandidates={wallet.omittedSuspectedTokens.length > 0} />
                   <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
                     `discovered after cutoff`는 cutoff 시점 누락 토큰을 자동 보정하지 않습니다. `omitted-suspected`는 예외 후보 신호일 뿐이며, 실제 누락 여부는 운영 확인이 필요합니다.
                   </p>
@@ -179,6 +180,30 @@ function OmittedSection({ items }: { items: WalletOmittedSuspected[] }) {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+function CorrectionPolicySection({ hasOmittedCandidates }: { hasOmittedCandidates: boolean }) {
+  return (
+    <section
+      className={`rounded-lg border px-3 py-2 ${
+        hasOmittedCandidates
+          ? 'border-amber-300 bg-amber-50'
+          : 'border-slate-200 bg-slate-50'
+      }`}
+    >
+      <p className={`font-semibold ${hasOmittedCandidates ? 'text-amber-900' : 'text-ink'}`}>
+        {hasOmittedCandidates ? 'Correction Policy: Action Required' : 'Correction Policy'}
+      </p>
+      <p className={`mt-1 text-[11px] ${hasOmittedCandidates ? 'text-amber-800' : 'text-slate-600'}`}>
+        current phase 기본 원칙은 `re-onboarding only` 입니다. 기존 cutoff wallet 의 seed 를 in-place 로 수정하지 않습니다.
+      </p>
+      <ul className={`mt-2 space-y-1 text-[11px] ${hasOmittedCandidates ? 'text-amber-900' : 'text-slate-700'}`}>
+        <li>close 전 omitted token 확인 시: wallet 삭제 후 complete seed list 로 재등록</li>
+        <li>close 후 발견 시: operator 임의 수정 금지, finance/accounting approval 로 escalation</li>
+        <li>`FULL` 모드는 조사/감사용 fallback 이며 cutoff opening balance correction 자체가 아님</li>
+      </ul>
     </section>
   );
 }
