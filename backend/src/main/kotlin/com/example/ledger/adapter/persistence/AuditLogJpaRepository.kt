@@ -28,4 +28,28 @@ class AuditLogJpaRepository(
 
         return entry.copy(id = saved.id)
     }
+
+    override fun findLatest(entityType: String, entityId: String, action: String?): AuditLogEntry? {
+        val entity = if (action.isNullOrBlank()) {
+            springDataAuditLogRepository.findTopByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId)
+        } else {
+            springDataAuditLogRepository.findTopByEntityTypeAndEntityIdAndActionOrderByCreatedAtDesc(entityType, entityId, action)
+        } ?: return null
+
+        @Suppress("UNCHECKED_CAST")
+        val oldValue = entity.oldValue?.let { objectMapper.convertValue(it, Map::class.java) as Map<String, Any?> }
+        @Suppress("UNCHECKED_CAST")
+        val newValue = entity.newValue?.let { objectMapper.convertValue(it, Map::class.java) as Map<String, Any?> }
+
+        return AuditLogEntry(
+            id = entity.id,
+            entityType = entity.entityType,
+            entityId = entity.entityId,
+            action = entity.action,
+            oldValue = oldValue,
+            newValue = newValue,
+            actor = entity.actor,
+            createdAt = entity.createdAt
+        )
+    }
 }

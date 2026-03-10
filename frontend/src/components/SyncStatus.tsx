@@ -1,4 +1,4 @@
-import type { Wallet } from '@/types/wallet';
+import type { Wallet, WalletOmittedSuspected, WalletTokenPreview } from '@/types/wallet';
 
 interface SyncStatusProps {
   wallets: Wallet[];
@@ -58,11 +58,39 @@ export function SyncStatus({ wallets, onRetry, onDelete, busyActionKey }: SyncSt
                     <p>컷오프 기준 블록: {formatBlock(wallet.cutoffBlock)}</p>
                     <p>스냅샷 생성 블록: {formatBlock(wallet.snapshotBlock)}</p>
                     <p>스냅샷 이후 반영 블록 수: {syncedSinceSnapshot !== null ? `${formatBlock(syncedSinceSnapshot)} blocks` : '-'}</p>
+                    <p>
+                      최근 cutoff sign-off:{' '}
+                      {wallet.latestCutoffSignOff
+                        ? `${wallet.latestCutoffSignOff.reviewedBy} / ${formatDateTime(wallet.latestCutoffSignOff.reviewedAt)}`
+                        : '-'}
+                    </p>
                   </>
                 )}
                 <p>현재 동기화 도달 블록: {formatBlock(syncedBlock)}</p>
                 <p>마지막 동기화 시각: {formatDateTime(wallet.lastSyncedAt)}</p>
               </div>
+
+              {wallet.mode === 'BALANCE_FLOW_CUTOFF' && (
+                <div className="mt-3 space-y-3 text-xs">
+                  <TokenSection
+                    title="Seeded At Cutoff"
+                    description="opening balance에 포함된 ETH + seed 토큰"
+                    tokens={wallet.seededTokens}
+                    emptyText="기본 ETH만 포함되었거나 seed token이 없습니다."
+                  />
+                  <TokenSection
+                    title="Discovered After Cutoff"
+                    description="cutoff 이후 tx/log 활동으로 관측된 토큰"
+                    tokens={wallet.discoveredTokens}
+                    emptyText="아직 자동 발견된 토큰이 없습니다."
+                  />
+                  <OmittedSection items={wallet.omittedSuspectedTokens} />
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    `discovered after cutoff`는 cutoff 시점 누락 토큰을 자동 보정하지 않습니다. `omitted-suspected`는 예외 후보 신호일 뿐이며, 실제 누락 여부는 운영 확인이 필요합니다.
+                  </p>
+                </div>
+              )}
+
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
@@ -91,6 +119,67 @@ export function SyncStatus({ wallets, onRetry, onDelete, busyActionKey }: SyncSt
         {wallets.length === 0 && <li className="text-sm text-slate-500">아직 등록된 지갑이 없습니다.</li>}
       </ul>
     </div>
+  );
+}
+
+function TokenSection({
+  title,
+  description,
+  tokens,
+  emptyText
+}: {
+  title: string;
+  description: string;
+  tokens: WalletTokenPreview[];
+  emptyText: string;
+}) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="font-semibold text-ink">{title}</p>
+      <p className="mt-1 text-[11px] text-slate-500">{description}</p>
+      {tokens.length === 0 ? (
+        <p className="mt-2 text-[11px] text-slate-500">{emptyText}</p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {tokens.map((token) => (
+            <li key={`${title}-${token.tokenAddress ?? 'eth'}-${token.displayLabel}`} className="rounded-md bg-white px-2 py-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-ink">{token.displayLabel}</span>
+                {token.firstSeenBlock !== null && (
+                  <span className="text-[11px] text-slate-500">first seen @ {formatBlock(token.firstSeenBlock)}</span>
+                )}
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-slate-500">{token.tokenAddress ?? 'native ETH'}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function OmittedSection({ items }: { items: WalletOmittedSuspected[] }) {
+  return (
+    <section className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+      <p className="font-semibold text-rose-900">Omitted-Suspected Candidates</p>
+      <p className="mt-1 text-[11px] text-rose-700">컷오프 직후 활동 때문에 누락 가능성이 의심되는 예외 후보</p>
+      {items.length === 0 ? (
+        <p className="mt-2 text-[11px] text-rose-700">현재 예외로 분류된 토큰이 없습니다.</p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {items.map((item) => (
+            <li key={`${item.tokenAddress}-${item.firstSeenBlock}`} className="rounded-md bg-white/80 px-2 py-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-rose-950">{item.displayLabel}</span>
+                <span className="text-[11px] text-rose-700">first seen @ {formatBlock(item.firstSeenBlock)}</span>
+              </div>
+              <p className="mt-1 font-mono text-[11px] text-rose-700">{item.tokenAddress}</p>
+              <p className="mt-1 text-[11px] text-rose-700">{item.reason}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

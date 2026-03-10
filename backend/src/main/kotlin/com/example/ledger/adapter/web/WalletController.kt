@@ -1,6 +1,8 @@
 package com.example.ledger.adapter.web
 
 import com.example.ledger.application.dto.WalletCreateRequest
+import com.example.ledger.application.dto.WalletCutoffPreflightRequest
+import com.example.ledger.application.dto.WalletCutoffPreflightResponse
 import com.example.ledger.application.dto.WalletResponse
 import com.example.ledger.application.dto.WalletStatusResponse
 import com.example.ledger.application.usecase.IngestWalletUseCase
@@ -26,9 +28,22 @@ class WalletController(
         return ingestWalletUseCase.registerWallet(
             address = request.address,
             label = request.label,
+            reviewedBy = request.reviewedBy,
+            preflightSummaryHash = request.preflightSummaryHash,
             mode = request.mode,
             cutoffBlock = request.cutoffBlock,
             startBlock = request.startBlock,
+            trackedTokens = request.trackedTokens
+        )
+    }
+
+    @PostMapping("/cutoff-preflight")
+    fun preflightCutoffWallet(
+        @Valid @RequestBody request: WalletCutoffPreflightRequest
+    ): WalletCutoffPreflightResponse {
+        return ingestWalletUseCase.preflightCutoffWallet(
+            address = request.address,
+            cutoffBlock = request.cutoffBlock,
             trackedTokens = request.trackedTokens
         )
     }

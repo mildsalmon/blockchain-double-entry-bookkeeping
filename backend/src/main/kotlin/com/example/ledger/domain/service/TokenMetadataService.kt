@@ -60,6 +60,40 @@ class TokenMetadataService(
         )
     }
 
+    fun resolveForPreview(tokenAddress: String?, fallbackSymbol: String?, blockNumber: Long? = null): TokenDisplayInfo {
+        val normalizedAddress = normalizeContractAddress(tokenAddress)
+        if (normalizedAddress == null) {
+            return displayInfo(normalizeSymbol(fallbackSymbol) ?: "ETH", null)
+        }
+
+        val onChainSymbol = fetchOnChainSymbol(normalizedAddress, blockNumber)
+        if (onChainSymbol != null) {
+            return displayInfo(onChainSymbol, normalizedAddress, ETHEREUM_CHAIN)
+        }
+
+        val cached = tokenMetadataRepository.findByChainAndTokenAddress(ETHEREUM_CHAIN, normalizedAddress)
+        if (cached != null) {
+            return displayInfo(cached.symbol, normalizedAddress, ETHEREUM_CHAIN)
+        }
+
+        return displayInfo(normalizeSymbol(fallbackSymbol) ?: ERR_SYMBOL, normalizedAddress, ETHEREUM_CHAIN)
+    }
+
+    fun resolveCachedForRead(tokenAddress: String?, fallbackSymbol: String?, chain: String?): TokenDisplayInfo {
+        val normalizedAddress = normalizeContractAddress(tokenAddress)
+        val resolvedChain = chain?.takeIf { it.isNotBlank() } ?: ETHEREUM_CHAIN
+        if (normalizedAddress == null) {
+            return displayInfo(normalizeSymbol(fallbackSymbol) ?: ERR_SYMBOL, null, resolvedChain)
+        }
+
+        val cached = tokenMetadataRepository.findByChainAndTokenAddress(resolvedChain, normalizedAddress)
+        if (cached != null) {
+            return displayInfo(cached.symbol, normalizedAddress, resolvedChain)
+        }
+
+        return displayInfo(normalizeSymbol(fallbackSymbol) ?: ERR_SYMBOL, normalizedAddress, resolvedChain)
+    }
+
     fun normalizeContractAddress(tokenAddress: String?): String? {
         if (tokenAddress.isNullOrBlank()) return null
         val clean = tokenAddress.removePrefix("0x").lowercase()

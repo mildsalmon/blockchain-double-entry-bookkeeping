@@ -1,5 +1,5 @@
 import type { Journal, JournalDetail } from '@/types/journal';
-import type { Wallet, WalletCreatePayload } from '@/types/wallet';
+import type { Wallet, WalletCreatePayload, WalletCutoffPreflight } from '@/types/wallet';
 import type { BalanceDashboard } from '@/types/dashboard';
 
 const JSON_HEADERS = {
@@ -27,6 +27,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   createWallet: (payload: WalletCreatePayload) =>
     request<Wallet>('/api/wallets', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  preflightCutoffWallet: (payload: Pick<WalletCreatePayload, 'address' | 'cutoffBlock' | 'trackedTokens'>) =>
+    request<WalletCutoffPreflight>('/api/wallets/cutoff-preflight', {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
