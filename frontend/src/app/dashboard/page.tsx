@@ -118,7 +118,9 @@ export default function DashboardPage() {
                   className="border-t border-slate-100"
                 >
                   <td className="px-4 py-3 font-mono text-xs text-slate-600">{position.walletAddress}</td>
-                  <td className="px-4 py-3">{position.tokenSymbol}</td>
+                  <td className="px-4 py-3" title={position.tokenAddress ?? undefined}>
+                    {position.displayLabel}
+                  </td>
                   <td className="px-4 py-3">{position.accountCode}</td>
                   <td className="px-4 py-3 font-semibold text-slate-800">{position.quantity}</td>
                   <td className="px-4 py-3 text-slate-600">{formatDateTime(position.lastEntryDate)}</td>

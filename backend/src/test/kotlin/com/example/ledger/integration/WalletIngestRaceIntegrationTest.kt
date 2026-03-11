@@ -2,6 +2,8 @@ package com.example.ledger.integration
 
 import com.example.ledger.application.usecase.IngestWalletUseCase
 import com.example.ledger.application.usecase.SyncPipelineUseCase
+import com.example.ledger.application.exception.ConflictException
+import com.example.ledger.domain.model.WalletSyncMode
 import com.example.ledger.domain.port.WalletRepository
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.times
@@ -65,5 +67,62 @@ class WalletIngestRaceIntegrationTest : IntegrationTestBase() {
         )
         assertEquals(1L, count, "Expected exactly 1 wallet row but found $count")
         verify(syncPipelineUseCase, times(2)).syncAsync(address)
+    }
+
+    @Test
+    fun `concurrent cutoff registration records signoff once and rejects losing config request`() {
+        val address = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        val cutoffBlock = 20_000_000L
+        val summaryHash = ingestWalletUseCase.preflightCutoffWallet(address, cutoffBlock).summaryHash
+        val threadCount = 2
+        val startLatch = CountDownLatch(1)
+        val doneLatch = CountDownLatch(threadCount)
+        val errors = mutableListOf<Throwable>()
+
+        val executor = Executors.newFixedThreadPool(threadCount)
+        listOf("ops-kim", "ops-lee").forEach { reviewer ->
+            executor.submit {
+                try {
+                    startLatch.await(3, TimeUnit.SECONDS)
+                    ingestWalletUseCase.registerWallet(
+                        address = address,
+                        reviewedBy = reviewer,
+                        preflightSummaryHash = summaryHash,
+                        mode = WalletSyncMode.BALANCE_FLOW_CUTOFF,
+                        cutoffBlock = cutoffBlock
+                    )
+                } catch (t: Throwable) {
+                    synchronized(errors) { errors.add(t) }
+                } finally {
+                    doneLatch.countDown()
+                }
+            }
+        }
+
+        startLatch.countDown()
+        doneLatch.await(10, TimeUnit.SECONDS)
+        executor.shutdownNow()
+
+        val conflictCount = errors.count { it is ConflictException }
+        assertEquals(1, conflictCount, "Expected exactly one conflicting loser request but got: $errors")
+
+        val walletCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM wallets WHERE address = ?",
+            Long::class.java,
+            address
+        )
+        assertEquals(1L, walletCount)
+
+        val signOffCount = jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*) FROM audit_log
+            WHERE entity_type = 'WALLET_CUTOFF_SEED_SIGNOFF'
+              AND entity_id = ?
+            """.trimIndent(),
+            Int::class.java,
+            address
+        )
+        assertEquals(1, signOffCount)
+        verify(syncPipelineUseCase, times(1)).syncAsync(address)
     }
 }

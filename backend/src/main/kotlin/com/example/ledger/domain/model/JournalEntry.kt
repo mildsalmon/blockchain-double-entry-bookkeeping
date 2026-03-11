@@ -53,15 +53,25 @@ data class JournalEntry(
         }
         updatedLines.zip(lines).forEachIndexed { index, (updated, existing) ->
             val sameTokenSymbol = updated.tokenSymbol == existing.tokenSymbol
+            val sameChain = normalizeChain(updated.chain) == normalizeChain(existing.chain)
+            val sameTokenAddress = normalizeTokenAddress(updated.tokenAddress) == normalizeTokenAddress(existing.tokenAddress)
             val sameTokenQuantity = when {
                 updated.tokenQuantity == null && existing.tokenQuantity == null -> true
                 updated.tokenQuantity != null && existing.tokenQuantity != null ->
                     updated.tokenQuantity.compareTo(existing.tokenQuantity) == 0
                 else -> false
             }
-            require(sameTokenSymbol && sameTokenQuantity) {
+            require(sameTokenSymbol && sameChain && sameTokenAddress && sameTokenQuantity) {
                 "Token metadata is immutable on line $index. Re-run pipeline for quantity changes."
             }
         }
+    }
+
+    private fun normalizeChain(chain: String?): String? {
+        return chain?.trim()?.uppercase()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun normalizeTokenAddress(tokenAddress: String?): String? {
+        return tokenAddress?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
     }
 }

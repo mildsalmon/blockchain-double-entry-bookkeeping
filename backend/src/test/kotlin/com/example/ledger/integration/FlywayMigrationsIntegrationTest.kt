@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 class FlywayMigrationsIntegrationTest : IntegrationTestBase() {
 
     @Test
-    fun `migration V7 and V8 should apply cutoff tables and token quantity precision`() {
+    fun `migration V7, V8, and V9 should apply cutoff tables, token precision, and token identity columns`() {
         val v7Count = jdbcTemplate.queryForObject(
             "SELECT count(*) FROM flyway_schema_history WHERE version = '7' AND success = true",
             Long::class.java
@@ -18,6 +18,12 @@ class FlywayMigrationsIntegrationTest : IntegrationTestBase() {
             Long::class.java
         ) ?: 0L
         assertEquals(1L, v8Count)
+
+        val v9Count = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM flyway_schema_history WHERE version = '9' AND success = true",
+            Long::class.java
+        ) ?: 0L
+        assertEquals(1L, v9Count)
 
         val unspecifiedIncomeCount = jdbcTemplate.queryForObject(
             "SELECT count(*) FROM accounts WHERE code = '수익:미지정수입' AND is_system = true",
@@ -52,5 +58,51 @@ class FlywayMigrationsIntegrationTest : IntegrationTestBase() {
             Long::class.java
         ) ?: 0L
         assertEquals(78L, tokenQuantityPrecision)
+
+        val tokenMetadataTableCount = jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'token_metadata'",
+            Long::class.java
+        ) ?: 0L
+        assertEquals(1L, tokenMetadataTableCount)
+
+        val journalLineChainCount = jdbcTemplate.queryForObject(
+            """
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_name = 'journal_lines' AND column_name = 'chain'
+            """.trimIndent(),
+            Long::class.java
+        ) ?: 0L
+        assertEquals(1L, journalLineChainCount)
+
+        val journalLineTokenAddressCount = jdbcTemplate.queryForObject(
+            """
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_name = 'journal_lines' AND column_name = 'token_address'
+            """.trimIndent(),
+            Long::class.java
+        ) ?: 0L
+        assertEquals(1L, journalLineTokenAddressCount)
+
+        val costBasisLotChainCount = jdbcTemplate.queryForObject(
+            """
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_name = 'cost_basis_lots' AND column_name = 'chain'
+            """.trimIndent(),
+            Long::class.java
+        ) ?: 0L
+        assertEquals(1L, costBasisLotChainCount)
+
+        val costBasisLotTokenAddressCount = jdbcTemplate.queryForObject(
+            """
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_name = 'cost_basis_lots' AND column_name = 'token_address'
+            """.trimIndent(),
+            Long::class.java
+        ) ?: 0L
+        assertEquals(1L, costBasisLotTokenAddressCount)
     }
 }

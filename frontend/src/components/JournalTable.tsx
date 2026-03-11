@@ -43,13 +43,17 @@ export function JournalTable({ journals }: JournalTableProps) {
                 <td className="px-4 py-3">
                   <p>{debit?.accountCode ?? '-'}</p>
                   {debit?.tokenQuantity !== null && debit?.tokenQuantity !== undefined && (
-                    <p className="text-xs text-slate-500">{formatTokenQuantity(debit.tokenQuantity, debit.tokenSymbol)}</p>
+                    <p className="text-xs text-slate-500" title={debit.tokenAddress ?? undefined}>
+                      {formatTokenQuantity(debit.tokenQuantity, debit.displayLabel)}
+                    </p>
                   )}
                 </td>
                 <td className="px-4 py-3">
                   <p>{credit?.accountCode ?? '-'}</p>
                   {credit?.tokenQuantity !== null && credit?.tokenQuantity !== undefined && (
-                    <p className="text-xs text-slate-500">{formatTokenQuantity(credit.tokenQuantity, credit.tokenSymbol)}</p>
+                    <p className="text-xs text-slate-500" title={credit.tokenAddress ?? undefined}>
+                      {formatTokenQuantity(credit.tokenQuantity, credit.displayLabel)}
+                    </p>
                   )}
                 </td>
                 <td className="px-4 py-3">
@@ -89,7 +93,7 @@ function numericSign(value: string | number | null | undefined): number {
   return text.startsWith('-') ? -1 : 1;
 }
 
-function formatTokenQuantity(quantity: string | number, symbol: string | null): string {
-  const symbolSuffix = symbol ? ` ${symbol}` : '';
+function formatTokenQuantity(quantity: string | number, displayLabel: string | null): string {
+  const symbolSuffix = displayLabel ? ` ${displayLabel}` : '';
   return `${quantity}${symbolSuffix}`;
 }

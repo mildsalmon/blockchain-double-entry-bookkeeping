@@ -26,6 +26,7 @@ abstract class IntegrationTestBase {
               accounting_events,
               raw_transactions,
               cost_basis_lots,
+              token_metadata,
               wallet_balance_snapshots,
               wallet_tracked_tokens,
               wallets,
@@ -52,6 +53,7 @@ abstract class IntegrationTestBase {
             registry.add("app.ethereum.rpc-url") { "http://localhost:8545" }
             registry.add("app.coingecko.api-key") { "test-key" }
             registry.add("app.cors.allowed-origins") { "http://localhost:3000" }
+            registry.add("app.admin-correction.users") { "ops-kim:test-admin-password,ops-lee:test-admin-password-2" }
         }
     }
 }

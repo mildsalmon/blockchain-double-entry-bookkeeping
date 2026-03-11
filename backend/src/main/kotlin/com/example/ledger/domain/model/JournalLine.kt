@@ -9,6 +9,8 @@ data class JournalLine(
     val debitAmount: BigDecimal,
     val creditAmount: BigDecimal,
     val tokenSymbol: String? = null,
+    val chain: String? = null,
+    val tokenAddress: String? = null,
     val tokenQuantity: BigDecimal? = null,
     val createdAt: Instant = Instant.now()
 ) {

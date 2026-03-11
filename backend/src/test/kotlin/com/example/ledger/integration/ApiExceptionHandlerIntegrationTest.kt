@@ -82,6 +82,8 @@ class ApiExceptionHandlerIntegrationTest : IntegrationTestBase() {
                 anyOrNull(),
                 anyOrNull(),
                 anyOrNull(),
+                anyOrNull(),
+                anyOrNull(),
                 anyOrNull()
             )
         ).thenThrow(

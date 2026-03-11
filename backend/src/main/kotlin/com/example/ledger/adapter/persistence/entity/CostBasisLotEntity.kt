@@ -19,6 +19,10 @@ data class CostBasisLotEntity(
     val walletAddress: String,
     @Column(name = "token_symbol", nullable = false)
     val tokenSymbol: String,
+    @Column(name = "chain")
+    val chain: String? = null,
+    @Column(name = "token_address")
+    val tokenAddress: String? = null,
     @Column(name = "acquisition_date", nullable = false)
     val acquisitionDate: Instant,
     @Column(name = "quantity", nullable = false)

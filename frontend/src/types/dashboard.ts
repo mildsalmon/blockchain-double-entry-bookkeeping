@@ -2,6 +2,10 @@ export interface BalancePosition {
   walletAddress: string;
   accountCode: string;
   tokenSymbol: string;
+  chain: string | null;
+  chainLabel: string;
+  tokenAddress: string | null;
+  displayLabel: string;
   quantity: string;
   lastEntryDate: string;
 }

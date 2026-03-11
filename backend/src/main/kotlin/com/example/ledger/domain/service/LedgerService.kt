@@ -32,7 +32,8 @@ class LedgerService(
     private val blockchainDataPort: BlockchainDataPort,
     private val fifoService: FifoService,
     private val gainLossService: GainLossService,
-    private val auditService: AuditService
+    private val auditService: AuditService,
+    private val tokenMetadataService: TokenMetadataService
 ) {
     companion object {
         private const val ETH_ACCOUNT = "자산:암호화폐:ETH"
@@ -163,14 +164,16 @@ class LedgerService(
 
                 val tokenSymbol = balanceFlowSymbol(snapshot.tokenSymbol, snapshot.tokenAddress)
                 val assetAccountCode = resolveBalanceFlowAssetAccountCode(tokenSymbol, snapshot.tokenAddress)
+                val tokenAddress = normalizedLedgerTokenAddress(snapshot.tokenAddress)
+                val tokenChain = ledgerTokenChain(tokenAddress)
                 JournalEntry(
                     rawTransactionId = rawTransactionId,
                     entryDate = entryDate,
                     description = "Cutoff opening balance $tokenSymbol",
                     status = JournalStatus.AUTO_CLASSIFIED,
                     lines = listOf(
-                        line(assetAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
-                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                        line(assetAccountCode, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity),
+                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity.negate())
                     )
                 )
             }
@@ -240,6 +243,8 @@ class LedgerService(
     ): JournalEntry? {
         val tokenSymbol = balanceFlowSymbol(event.tokenSymbol, event.tokenAddress)
         val tokenAccountCode = resolveBalanceFlowAssetAccountCode(tokenSymbol, event.tokenAddress)
+        val tokenAddress = normalizedLedgerTokenAddress(event.tokenAddress)
+        val tokenChain = ledgerTokenChain(tokenAddress)
         val quantity = event.amountDecimal.abs()
 
         return when (event.eventType) {
@@ -251,8 +256,8 @@ class LedgerService(
                     description = "Incoming $tokenSymbol",
                     status = JournalStatus.AUTO_CLASSIFIED,
                     lines = listOf(
-                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
-                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity),
+                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity.negate())
                     )
                 )
 
@@ -264,8 +269,8 @@ class LedgerService(
                     description = "Outgoing $tokenSymbol",
                     status = JournalStatus.AUTO_CLASSIFIED,
                     lines = listOf(
-                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
-                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                        line(EXTERNAL_ASSET_ACCOUNT, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity),
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity.negate())
                     )
                 )
 
@@ -277,8 +282,8 @@ class LedgerService(
                     description = "Gas fee",
                     status = JournalStatus.AUTO_CLASSIFIED,
                     lines = listOf(
-                        line(GAS_FEE_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
-                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                        line(GAS_FEE_ACCOUNT, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity),
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity.negate())
                     )
                 )
 
@@ -288,6 +293,8 @@ class LedgerService(
                     event.metadata["tokenOutAddress"]?.toString()
                 )
                 val tokenOutAddress = event.metadata["tokenOutAddress"]?.toString()
+                val normalizedTokenOutAddress = normalizedLedgerTokenAddress(tokenOutAddress)
+                val tokenOutChain = ledgerTokenChain(normalizedTokenOutAddress)
                 val tokenOutAmount = event.metadata["amountOut"]?.toString()?.toBigDecimalOrNull()?.abs() ?: BigDecimal.ZERO
                 val tokenOutAccount = resolveBalanceFlowAssetAccountCode(tokenOutSymbol, tokenOutAddress)
 
@@ -298,8 +305,8 @@ class LedgerService(
                     description = "Swap $tokenSymbol -> $tokenOutSymbol",
                     status = JournalStatus.AUTO_CLASSIFIED,
                     lines = listOf(
-                        line(tokenOutAccount, tokenSymbol = tokenOutSymbol, tokenQuantity = tokenOutAmount),
-                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                        line(tokenOutAccount, tokenSymbol = tokenOutSymbol, chain = tokenOutChain, tokenAddress = normalizedTokenOutAddress, tokenQuantity = tokenOutAmount),
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity.negate())
                     )
                 )
             }
@@ -312,8 +319,8 @@ class LedgerService(
                     description = "Incoming $tokenSymbol",
                     status = JournalStatus.AUTO_CLASSIFIED,
                     lines = listOf(
-                        line(tokenAccountCode, tokenSymbol = tokenSymbol, tokenQuantity = quantity),
-                        line(AIRDROP_ACCOUNT, tokenSymbol = tokenSymbol, tokenQuantity = quantity.negate())
+                        line(tokenAccountCode, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity),
+                        line(AIRDROP_ACCOUNT, tokenSymbol = tokenSymbol, chain = tokenChain, tokenAddress = tokenAddress, tokenQuantity = quantity.negate())
                     )
                 )
 
@@ -329,10 +336,15 @@ class LedgerService(
         amountKrw: BigDecimal,
         offsetAccountCode: String
     ): JournalEntry {
-        val assetAccountCode = resolveAssetAccountCode(event)
+        val tokenSymbol = event.tokenSymbol ?: "ETH"
+        val tokenAddress = normalizedLedgerTokenAddress(event.tokenAddress)
+        val tokenChain = ledgerTokenChain(tokenAddress)
+        val assetAccountCode = resolveAssetAccountCode(event.copy(tokenSymbol = tokenSymbol))
         fifoService.addLot(
             walletAddress = walletAddress,
-            tokenSymbol = event.tokenSymbol ?: "ETH",
+            tokenSymbol = tokenSymbol,
+            chain = tokenChain,
+            tokenAddress = tokenAddress,
             quantity = event.amountDecimal,
             unitCostKrw = event.priceKrw ?: BigDecimal.ZERO,
             rawTransactionId = rawTransactionId,
@@ -343,7 +355,7 @@ class LedgerService(
             accountingEventId = event.id,
             rawTransactionId = rawTransactionId,
             entryDate = entryDate,
-            description = "Incoming ${event.tokenSymbol ?: "ETH"}",
+            description = "Incoming $tokenSymbol",
             status = JournalStatus.AUTO_CLASSIFIED,
             lines = listOf(
                 line(assetAccountCode, debit = amountKrw),
@@ -359,8 +371,11 @@ class LedgerService(
         entryDate: Instant,
         proceedsKrw: BigDecimal
     ): JournalEntry {
-        val assetAccountCode = resolveAssetAccountCode(event)
-        val fifo = fifoService.consume(walletAddress, event.tokenSymbol ?: "ETH", event.amountDecimal)
+        val tokenSymbol = event.tokenSymbol ?: "ETH"
+        val tokenAddress = normalizedLedgerTokenAddress(event.tokenAddress)
+        val tokenChain = ledgerTokenChain(tokenAddress)
+        val assetAccountCode = resolveAssetAccountCode(event.copy(tokenSymbol = tokenSymbol))
+        val fifo = fifoService.consume(walletAddress, tokenSymbol, event.amountDecimal, tokenChain, tokenAddress)
         val gainLoss = gainLossService.calculate(proceedsKrw, fifo.totalCostKrw)
 
         val lines = mutableListOf(
@@ -373,7 +388,7 @@ class LedgerService(
             accountingEventId = event.id,
             rawTransactionId = rawTransactionId,
             entryDate = entryDate,
-            description = "Outgoing ${event.tokenSymbol ?: "ETH"}",
+            description = "Outgoing $tokenSymbol",
             status = JournalStatus.AUTO_CLASSIFIED,
             lines = lines
         )
@@ -386,6 +401,8 @@ class LedgerService(
         entryDate: Instant,
         proceedsKrw: BigDecimal
     ): JournalEntry {
+        // TODO(multichain-fees): ETH is the native gas asset for the current Ethereum-only scope.
+        // When non-Ethereum chains are added, derive the fee asset from the transaction chain's native token.
         val assetAccountCode = ETH_ACCOUNT
         val fifo = fifoService.consume(walletAddress, "ETH", event.amountDecimal)
         val gainLoss = gainLossService.calculate(proceedsKrw, fifo.totalCostKrw)
@@ -415,17 +432,21 @@ class LedgerService(
     ): JournalEntry {
         val tokenInSymbol = event.tokenSymbol ?: "ETH"
         val tokenOutSymbol = event.metadata["tokenOutSymbol"]?.toString() ?: "ETH"
+        val tokenInAddress = normalizedLedgerTokenAddress(event.tokenAddress)
+        val tokenOutAddress = normalizedLedgerTokenAddress(event.metadata["tokenOutAddress"]?.toString())
+        val tokenInChain = ledgerTokenChain(tokenInAddress)
+        val tokenOutChain = ledgerTokenChain(tokenOutAddress)
         val tokenOutAmount = event.metadata["amountOut"]?.toString()?.toBigDecimalOrNull() ?: BigDecimal.ZERO
 
         val tokenInAccount = resolveAssetAccountCode(event)
         val tokenOutAccount = resolveAssetAccountCode(
             event.copy(
                 tokenSymbol = tokenOutSymbol,
-                tokenAddress = event.metadata["tokenOutAddress"]?.toString()
+                tokenAddress = tokenOutAddress
             )
         )
 
-        val fifo = fifoService.consume(walletAddress, tokenInSymbol, event.amountDecimal)
+        val fifo = fifoService.consume(walletAddress, tokenInSymbol, event.amountDecimal, tokenInChain, tokenInAddress)
         val gainLoss = gainLossService.calculate(proceedsKrw, fifo.totalCostKrw)
 
         if (tokenOutAmount > BigDecimal.ZERO) {
@@ -433,6 +454,8 @@ class LedgerService(
             fifoService.addLot(
                 walletAddress = walletAddress,
                 tokenSymbol = tokenOutSymbol,
+                chain = tokenOutChain,
+                tokenAddress = tokenOutAddress,
                 quantity = tokenOutAmount,
                 unitCostKrw = unitCost,
                 rawTransactionId = rawTransactionId,
@@ -441,8 +464,8 @@ class LedgerService(
         }
 
         val lines = mutableListOf(
-            line(tokenOutAccount, debit = proceedsKrw, tokenSymbol = tokenOutSymbol, tokenQuantity = tokenOutAmount),
-            line(tokenInAccount, credit = fifo.totalCostKrw, tokenSymbol = tokenInSymbol, tokenQuantity = event.amountDecimal)
+            line(tokenOutAccount, debit = proceedsKrw, tokenSymbol = tokenOutSymbol, chain = tokenOutChain, tokenAddress = tokenOutAddress, tokenQuantity = tokenOutAmount),
+            line(tokenInAccount, credit = fifo.totalCostKrw, tokenSymbol = tokenInSymbol, chain = tokenInChain, tokenAddress = tokenInAddress, tokenQuantity = event.amountDecimal.negate())
         )
         lines += gainLossLines(gainLoss)
 
@@ -458,24 +481,26 @@ class LedgerService(
 
     private fun resolveAssetAccountCode(event: AccountingEvent): String {
         val symbol = event.tokenSymbol ?: "ETH"
-        if (symbol == "ETH") {
+        val tokenAddress = normalizedLedgerTokenAddress(event.tokenAddress)
+        if (tokenAddress == null && symbol == "ETH") {
             ensureAccountExists(ETH_ACCOUNT, "ETH 보유 자산", AccountCategory.ASSET, system = true)
             return ETH_ACCOUNT
         }
 
-        val code = "$ERC20_PREFIX${symbol.uppercase()}"
-        ensureAccountExists(code, "$symbol 보유 자산", AccountCategory.ASSET, system = true)
+        val code = erc20AccountCode(symbol, tokenAddress)
+        ensureAccountExists(code, assetAccountName(symbol, tokenAddress), AccountCategory.ASSET, system = true)
         return code
     }
 
     private fun resolveBalanceFlowAssetAccountCode(tokenSymbol: String, tokenAddress: String?): String {
-        if (tokenSymbol == "ETH" || tokenAddress.equals(NATIVE_ETH_TOKEN_ADDRESS, ignoreCase = true)) {
+        val normalizedTokenAddress = normalizedLedgerTokenAddress(tokenAddress)
+        if (normalizedTokenAddress == null && tokenSymbol == "ETH") {
             ensureAccountExists(ETH_ACCOUNT, "ETH 보유 자산", AccountCategory.ASSET, system = true)
             return ETH_ACCOUNT
         }
 
-        val code = "$ERC20_PREFIX${tokenSymbol.uppercase()}"
-        ensureAccountExists(code, "$tokenSymbol 보유 자산", AccountCategory.ASSET, system = true)
+        val code = erc20AccountCode(tokenSymbol, normalizedTokenAddress)
+        ensureAccountExists(code, assetAccountName(tokenSymbol, normalizedTokenAddress), AccountCategory.ASSET, system = true)
         return code
     }
 
@@ -483,12 +508,7 @@ class LedgerService(
         if (tokenAddress.equals(NATIVE_ETH_TOKEN_ADDRESS, ignoreCase = true)) {
             return "ETH"
         }
-        val normalized = tokenSymbol?.trim().orEmpty()
-        if (normalized.isBlank() || normalized.equals("ERC20", ignoreCase = true) || normalized.equals("UNKNOWN", ignoreCase = true)) {
-            val suffix = tokenAddress?.removePrefix("0x")?.takeLast(8)?.uppercase()
-            return if (suffix.isNullOrBlank()) "ERC20" else "ERC20-$suffix"
-        }
-        return normalized.uppercase()
+        return tokenMetadataService.normalizeSymbol(tokenSymbol) ?: TokenMetadataService.ERR_SYMBOL
     }
 
     private fun snapshotBalanceToQuantity(snapshot: WalletBalanceSnapshot): BigDecimal {
@@ -517,6 +537,8 @@ class LedgerService(
         debit: BigDecimal = BigDecimal.ZERO,
         credit: BigDecimal = BigDecimal.ZERO,
         tokenSymbol: String? = null,
+        chain: String? = null,
+        tokenAddress: String? = null,
         tokenQuantity: BigDecimal? = null
     ): JournalLine {
         return JournalLine(
@@ -524,8 +546,34 @@ class LedgerService(
             debitAmount = debit.roundMoney(),
             creditAmount = credit.roundMoney(),
             tokenSymbol = tokenSymbol,
+            chain = chain,
+            tokenAddress = tokenAddress,
             tokenQuantity = tokenQuantity
         )
+    }
+
+    private fun normalizedLedgerTokenAddress(tokenAddress: String?): String? {
+        return tokenMetadataService.normalizeContractAddress(tokenAddress)
+    }
+
+    private fun ledgerTokenChain(tokenAddress: String?): String? {
+        return if (tokenAddress == null) null else TokenMetadataService.ETHEREUM_CHAIN
+    }
+
+    private fun erc20AccountCode(tokenSymbol: String, tokenAddress: String?): String {
+        return if (tokenAddress.isNullOrBlank()) {
+            "$ERC20_PREFIX${tokenSymbol.uppercase()}"
+        } else {
+            "$ERC20_PREFIX${tokenSymbol.uppercase()}@${tokenAddress.lowercase()}"
+        }
+    }
+
+    private fun assetAccountName(tokenSymbol: String, tokenAddress: String?): String {
+        return if (tokenAddress.isNullOrBlank()) {
+            "$tokenSymbol 보유 자산"
+        } else {
+            "$tokenSymbol 보유 자산 (${tokenAddress.takeLast(6)})"
+        }
     }
 
     private fun gainLossLines(gainLoss: BigDecimal): List<JournalLine> {

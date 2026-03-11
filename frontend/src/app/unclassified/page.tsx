@@ -9,6 +9,7 @@ interface UnclassifiedEvent {
   classifierId: string;
   rawTransactionId: number;
   tokenSymbol: string | null;
+  tokenAddress: string | null;
 }
 
 export default function UnclassifiedPage() {
@@ -34,6 +35,8 @@ export default function UnclassifiedPage() {
             <div className="mt-3">
               <ManualClassifyForm
                 eventId={event.id}
+                initialTokenSymbol={event.tokenSymbol}
+                initialTokenAddress={event.tokenAddress}
                 onSubmit={async (eventId, payload) => {
                   await api.classifyUnclassified(eventId, payload);
                   await load();

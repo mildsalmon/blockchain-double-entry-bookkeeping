@@ -74,6 +74,8 @@ class JournalController(
             debitAmount = debitAmount,
             creditAmount = creditAmount,
             tokenSymbol = tokenSymbol,
+            chain = chain,
+            tokenAddress = tokenAddress,
             tokenQuantity = tokenQuantity
         )
     }

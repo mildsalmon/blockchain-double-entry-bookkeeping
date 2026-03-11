@@ -6,6 +6,10 @@ export interface JournalLine {
   debitAmount: string;
   creditAmount: string;
   tokenSymbol: string | null;
+  chain: string | null;
+  chainLabel: string;
+  tokenAddress: string | null;
+  displayLabel: string | null;
   tokenQuantity: string | null;
 }
 

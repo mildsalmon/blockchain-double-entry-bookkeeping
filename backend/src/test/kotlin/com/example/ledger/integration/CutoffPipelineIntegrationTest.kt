@@ -195,7 +195,7 @@ class CutoffPipelineIntegrationTest : IntegrationTestBase() {
 
         val journals = journalRepository.findByFilters(size = 100)
         val incomingUsdc = journals.first { it.description == "Incoming USDC" }
-        val assetLine = incomingUsdc.lines.first { it.accountCode == "자산:암호화폐:ERC20:USDC" }
+        val assetLine = incomingUsdc.lines.first { it.accountCode == "자산:암호화폐:ERC20:USDC@$tokenAddress" }
         val quantity = requireNotNull(assetLine.tokenQuantity)
         assertEquals(0, quantity.compareTo(BigDecimal("1.5")))
     }
@@ -243,8 +243,8 @@ class CutoffPipelineIntegrationTest : IntegrationTestBase() {
 
         val journals = journalRepository.findByFilters(size = 100)
         val swapEntry = journals.first { it.description == "Swap USDC -> WETH" }
-        val tokenOutLine = swapEntry.lines.first { it.accountCode == "자산:암호화폐:ERC20:WETH" }
-        val tokenInLine = swapEntry.lines.first { it.accountCode == "자산:암호화폐:ERC20:USDC" }
+        val tokenOutLine = swapEntry.lines.first { it.accountCode == "자산:암호화폐:ERC20:WETH@$tokenOutAddress" }
+        val tokenInLine = swapEntry.lines.first { it.accountCode == "자산:암호화폐:ERC20:USDC@$tokenInAddress" }
 
         assertEquals(0, requireNotNull(tokenOutLine.tokenQuantity).compareTo(BigDecimal("0.25")))
         assertEquals(0, requireNotNull(tokenInLine.tokenQuantity).compareTo(BigDecimal("-1.5")))

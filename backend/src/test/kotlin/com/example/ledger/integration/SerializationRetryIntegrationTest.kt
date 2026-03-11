@@ -74,7 +74,7 @@ class SerializationRetryIntegrationTest : IntegrationTestBase() {
                 system = true
             )
         )
-        whenever(fifoService.addLot(any(), any(), any(), any(), anyOrNull(), any())).thenReturn(
+        whenever(fifoService.addLot(any(), any(), anyOrNull(), anyOrNull(), any(), any(), anyOrNull(), any())).thenReturn(
             CostBasisLot(
                 id = 1L,
                 walletAddress = walletAddress,

@@ -4,6 +4,7 @@ import com.example.ledger.application.dto.ManualClassifyRequest
 import com.example.ledger.application.dto.JournalResponse
 import com.example.ledger.application.usecase.JournalUseCase
 import com.example.ledger.domain.model.AccountingEvent
+import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -23,7 +24,7 @@ class UnclassifiedController(
     }
 
     @PostMapping("/{id}/classify")
-    fun classify(@PathVariable id: Long, @RequestBody request: ManualClassifyRequest): JournalResponse {
+    fun classify(@PathVariable id: Long, @Valid @RequestBody request: ManualClassifyRequest): JournalResponse {
         return journalUseCase.manualClassify(
             eventId = id,
             eventType = request.eventType,

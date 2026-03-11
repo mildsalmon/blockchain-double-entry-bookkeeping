@@ -29,6 +29,10 @@ class JournalLineEntity(
     var creditAmount: BigDecimal,
     @Column(name = "token_symbol")
     var tokenSymbol: String? = null,
+    @Column(name = "chain")
+    var chain: String? = null,
+    @Column(name = "token_address")
+    var tokenAddress: String? = null,
     @Column(name = "token_quantity")
     var tokenQuantity: BigDecimal? = null,
     @Column(name = "created_at", nullable = false)

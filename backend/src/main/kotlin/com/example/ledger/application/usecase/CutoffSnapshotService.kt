@@ -4,16 +4,17 @@ import com.example.ledger.domain.model.Wallet
 import com.example.ledger.domain.model.WalletBalanceSnapshot
 import com.example.ledger.domain.port.BlockchainDataPort
 import com.example.ledger.domain.port.WalletBalanceSnapshotRepository
+import com.example.ledger.domain.service.TokenMetadataService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
 private const val NATIVE_ETH_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
-private const val TOKEN_SYMBOL_MAX_LENGTH = 20
 
 @Service
 class CutoffSnapshotService(
     private val blockchainDataPort: BlockchainDataPort,
-    private val walletBalanceSnapshotRepository: WalletBalanceSnapshotRepository
+    private val walletBalanceSnapshotRepository: WalletBalanceSnapshotRepository,
+    private val tokenMetadataService: TokenMetadataService
 ) {
     @Transactional
     fun collect(wallet: Wallet): List<WalletBalanceSnapshot> {
@@ -32,12 +33,7 @@ class CutoffSnapshotService(
         )
 
         wallet.trackedTokens.forEach { tokenAddress ->
-            val resolvedSymbol = blockchainDataPort.getTokenSymbol(tokenAddress, cutoffBlock)
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-                ?.take(TOKEN_SYMBOL_MAX_LENGTH)
-                ?.uppercase()
-                ?: "ERC20"
+            val resolvedSymbol = tokenMetadataService.resolveForWrite(tokenAddress, null, cutoffBlock).tokenSymbol
             snapshots += WalletBalanceSnapshot(
                 walletId = walletId,
                 tokenAddress = tokenAddress,
