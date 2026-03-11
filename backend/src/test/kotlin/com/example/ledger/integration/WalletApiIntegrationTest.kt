@@ -2,6 +2,7 @@ package com.example.ledger.integration
 
 import com.example.ledger.application.usecase.SyncPipelineUseCase
 import com.example.ledger.domain.port.BlockchainDataPort
+import com.example.ledger.domain.model.SyncStatus
 import com.example.ledger.domain.model.Wallet
 import com.example.ledger.domain.model.WalletSyncMode
 import com.example.ledger.domain.model.WalletSyncPhase
@@ -176,6 +177,10 @@ class WalletApiIntegrationTest : IntegrationTestBase() {
             .andExpect {
                 status { isOk() }
                 jsonPath("$[0].latestCutoffSignOff.reviewedBy") { value("ops-kim") }
+                jsonPath("$[0].latestCutoffSignOff.source") { value("INITIAL_REGISTRATION") }
+                jsonPath("$[0].adminCorrectionEnabled") { value(true) }
+                jsonPath("$[0].adminCorrectionEligible") { value(false) }
+                jsonPath("$[0].adminCorrectionIneligibleReason") { value("Admin correction requires an existing cutoff snapshot.") }
                 jsonPath("$[0].seededTokens.length()") { value(2) }
                 jsonPath("$[0].discoveredTokens.length()") { value(2) }
                 jsonPath("$[0].omittedSuspectedTokens.length()") { value(1) }
@@ -184,6 +189,54 @@ class WalletApiIntegrationTest : IntegrationTestBase() {
 
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM token_metadata", Int::class.java))
         verifyNoInteractions(blockchainDataPort)
+    }
+
+    @Test
+    fun `wallet status exposes wallet level admin correction eligibility`() {
+        val address = "0x4545454545454545454545454545454545454545"
+        walletRepository.save(
+            Wallet(
+                address = address,
+                syncMode = WalletSyncMode.BALANCE_FLOW_CUTOFF,
+                syncPhase = WalletSyncPhase.SNAPSHOT_PENDING,
+                syncStatus = SyncStatus.SYNCING,
+                cutoffBlock = 100L,
+                snapshotBlock = null
+            )
+        )
+
+        mockMvc.get("/api/wallets/$address/status")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.adminCorrectionEnabled") { value(true) }
+                jsonPath("$.adminCorrectionEligible") { value(false) }
+                jsonPath("$.adminCorrectionIneligibleReason") { value("Admin correction requires an existing cutoff snapshot.") }
+            }
+    }
+
+    @Test
+    fun `wallet status requires audited cutoff baseline for admin correction eligibility`() {
+        val address = "0x4646464646464646464646464646464646464646"
+        walletRepository.save(
+            Wallet(
+                address = address,
+                syncMode = WalletSyncMode.BALANCE_FLOW_CUTOFF,
+                syncPhase = WalletSyncPhase.DELTA_COMPLETED,
+                syncStatus = SyncStatus.COMPLETED,
+                cutoffBlock = 120L,
+                snapshotBlock = 120L,
+                deltaSyncedBlock = 150L,
+                lastSyncedBlock = 150L
+            )
+        )
+
+        mockMvc.get("/api/wallets/$address/status")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.adminCorrectionEnabled") { value(true) }
+                jsonPath("$.adminCorrectionEligible") { value(false) }
+                jsonPath("$.adminCorrectionIneligibleReason") { value("Admin correction requires an existing cutoff sign-off baseline.") }
+            }
     }
 
     @Test

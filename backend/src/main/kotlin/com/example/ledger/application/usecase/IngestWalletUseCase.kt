@@ -23,6 +23,7 @@ class IngestWalletUseCase(
     private val syncPipelineUseCase: SyncPipelineUseCase,
     private val auditService: AuditService,
     private val walletCutoffInsightsService: WalletCutoffInsightsService,
+    private val adminCorrectionAvailability: AdminCorrectionAvailability,
     transactionManager: PlatformTransactionManager
 ) {
     private val transactionTemplate = TransactionTemplate(transactionManager)
@@ -172,6 +173,10 @@ class IngestWalletUseCase(
 
     private fun Wallet.toResponse(): WalletResponse {
         val cutoffInsights = walletCutoffInsightsService.enrich(this)
+        val adminCorrectionReadiness = adminCorrectionAvailability.readinessFor(
+            this,
+            hasApprovedCutoffBaseline = cutoffInsights.latestCutoffSignOff != null
+        )
         return WalletResponse(
             id = id,
             address = address,
@@ -187,6 +192,10 @@ class IngestWalletUseCase(
             discoveredTokens = cutoffInsights.discoveredTokens,
             omittedSuspectedTokens = cutoffInsights.omittedSuspectedTokens,
             latestCutoffSignOff = cutoffInsights.latestCutoffSignOff,
+            adminCorrectionEnabled = adminCorrectionReadiness.enabled,
+            adminCorrectionUnavailableReason = adminCorrectionReadiness.unavailableReason,
+            adminCorrectionEligible = adminCorrectionReadiness.eligible,
+            adminCorrectionIneligibleReason = adminCorrectionReadiness.ineligibleReason,
             lastSyncedAt = lastSyncedAt,
             lastSyncedBlock = lastSyncedBlock
         )
@@ -194,6 +203,10 @@ class IngestWalletUseCase(
 
     private fun Wallet.toStatusResponse(): WalletStatusResponse {
         val cutoffInsights = walletCutoffInsightsService.enrich(this)
+        val adminCorrectionReadiness = adminCorrectionAvailability.readinessFor(
+            this,
+            hasApprovedCutoffBaseline = cutoffInsights.latestCutoffSignOff != null
+        )
         return WalletStatusResponse(
             address = address,
             mode = syncMode,
@@ -207,6 +220,10 @@ class IngestWalletUseCase(
             discoveredTokens = cutoffInsights.discoveredTokens,
             omittedSuspectedTokens = cutoffInsights.omittedSuspectedTokens,
             latestCutoffSignOff = cutoffInsights.latestCutoffSignOff,
+            adminCorrectionEnabled = adminCorrectionReadiness.enabled,
+            adminCorrectionUnavailableReason = adminCorrectionReadiness.unavailableReason,
+            adminCorrectionEligible = adminCorrectionReadiness.eligible,
+            adminCorrectionIneligibleReason = adminCorrectionReadiness.ineligibleReason,
             lastSyncedAt = lastSyncedAt,
             lastSyncedBlock = lastSyncedBlock
         )
@@ -294,7 +311,8 @@ class IngestWalletUseCase(
                     )
                 },
                 "seededTokenCount" to seededTokens.size,
-                "summaryHash" to walletCutoffInsightsService.buildSignOffSummaryHash(address, cutoffBlock, trackedTokens)
+                "summaryHash" to walletCutoffInsightsService.buildSignOffSummaryHash(address, cutoffBlock, trackedTokens),
+                "source" to "INITIAL_REGISTRATION"
             ),
             actor = reviewedBy
         )

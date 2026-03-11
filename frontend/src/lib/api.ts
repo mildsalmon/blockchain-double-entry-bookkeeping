@@ -1,5 +1,14 @@
 import type { Journal, JournalDetail } from '@/types/journal';
-import type { Wallet, WalletCreatePayload, WalletCutoffPreflight } from '@/types/wallet';
+import type {
+  AdminCorrectionLoginPayload,
+  AdminCorrectionSession,
+  Wallet,
+  WalletAdminCorrectionApplyPayload,
+  WalletAdminCorrectionPreflight,
+  WalletAdminCorrectionPreflightPayload,
+  WalletCreatePayload,
+  WalletCutoffPreflight
+} from '@/types/wallet';
 import type { BalanceDashboard } from '@/types/dashboard';
 
 const JSON_HEADERS = {
@@ -25,6 +34,22 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getAdminCorrectionSession: () => request<AdminCorrectionSession>('/api/admin-correction/session'),
+  createAdminCorrectionSession: (payload: AdminCorrectionLoginPayload) =>
+    request<AdminCorrectionSession>('/api/admin-correction/session', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  clearAdminCorrectionSession: async () => {
+    const response = await fetch('/api/admin-correction/session', {
+      method: 'DELETE',
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(body || `Request failed: ${response.status}`);
+    }
+  },
   createWallet: (payload: WalletCreatePayload) =>
     request<Wallet>('/api/wallets', {
       method: 'POST',
@@ -37,6 +62,16 @@ export const api = {
     }),
   listWallets: () => request<Wallet[]>('/api/wallets'),
   getWalletStatus: (address: string) => request<Wallet>(`/api/wallets/${address}/status`),
+  preflightWalletAdminCorrection: (address: string, payload: WalletAdminCorrectionPreflightPayload) =>
+    request<WalletAdminCorrectionPreflight>(`/api/admin-corrections/${address}/preflight`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  applyWalletAdminCorrection: (address: string, payload: WalletAdminCorrectionApplyPayload) =>
+    request<Wallet>(`/api/admin-corrections/${address}/apply`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
   retryWallet: (address: string) =>
     request<Wallet>(`/api/wallets/${address}/retry`, {
       method: 'POST'

@@ -77,6 +77,10 @@ class WalletCutoffInsightsService(
         )
     }
 
+    fun hasApprovedCutoffBaseline(walletAddress: String): Boolean {
+        return findLatestCutoffSignOff(walletAddress) != null
+    }
+
     fun buildSignOffSummaryHash(
         address: String,
         cutoffBlock: Long,
@@ -197,6 +201,9 @@ class WalletCutoffInsightsService(
         val cutoffBlock = payload["cutoffBlock"].asLong() ?: return null
         val seededTokenCount = payload["seededTokenCount"].asInt() ?: 0
         val summaryHash = payload["summaryHash"]?.toString()?.takeIf { it.isNotBlank() } ?: return null
+        val source = payload["source"]?.toString()?.takeIf { it.isNotBlank() }
+        val approvalReference = payload["approvalReference"]?.toString()?.takeIf { it.isNotBlank() }
+        val reason = payload["reason"]?.toString()?.takeIf { it.isNotBlank() }
         val seededTokens = payload["seededTokens"].asSeededTokens()
 
         return CutoffSignOffSnapshot(
@@ -205,7 +212,10 @@ class WalletCutoffInsightsService(
                 reviewedAt = entry.createdAt,
                 cutoffBlock = cutoffBlock,
                 seededTokenCount = seededTokenCount,
-                summaryHash = summaryHash
+                summaryHash = summaryHash,
+                source = source,
+                approvalReference = approvalReference,
+                reason = reason
             ),
             seededTokens = seededTokens
         )

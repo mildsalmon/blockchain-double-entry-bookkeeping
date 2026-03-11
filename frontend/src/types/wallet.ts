@@ -43,6 +43,9 @@ export interface WalletCutoffSignOff {
   cutoffBlock: number;
   seededTokenCount: number;
   summaryHash: string;
+  source: string | null;
+  approvalReference: string | null;
+  reason: string | null;
 }
 
 export interface WalletCutoffPreflight {
@@ -52,6 +55,53 @@ export interface WalletCutoffPreflight {
   seededTokens: WalletTokenPreview[];
   summaryHash: string;
   warning: string;
+}
+
+export interface WalletAdminCorrectionPreflightPayload {
+  tokenAddresses: string[];
+  approvalReference: string;
+  reason: string;
+}
+
+export interface WalletAdminCorrectionApplyPayload extends WalletAdminCorrectionPreflightPayload {
+  summaryHash: string;
+}
+
+export interface AdminCorrectionSession {
+  authenticated: boolean;
+  username: string;
+  expiresAt: string;
+}
+
+export interface AdminCorrectionLoginPayload {
+  username: string;
+  password: string;
+}
+
+export interface WalletAdminCorrectionPreflight {
+  walletAddress: string;
+  cutoffBlock: number;
+  strategy: string;
+  currentTrackedTokens: string[];
+  resultingTrackedTokens: string[];
+  requestedTokens: string[];
+  omittedCandidateMatches: WalletOmittedSuspected[];
+  currentSeededTokens: WalletTokenPreview[];
+  resultingSeededTokens: WalletTokenPreview[];
+  impact: WalletAdminCorrectionImpact;
+  summaryHash: string;
+  warnings: string[];
+}
+
+export interface WalletAdminCorrectionImpact {
+  snapshotCount: number;
+  rawTransactionCount: number;
+  accountingEventCount: number;
+  journalEntryCount: number;
+  costBasisLotCount: number;
+  replayFromBlock: number;
+  replayToBlock: number | null;
+  replayBlockSpan: number | null;
 }
 
 export interface Wallet {
@@ -69,6 +119,10 @@ export interface Wallet {
   discoveredTokens: WalletTokenPreview[];
   omittedSuspectedTokens: WalletOmittedSuspected[];
   latestCutoffSignOff: WalletCutoffSignOff | null;
+  adminCorrectionEnabled: boolean;
+  adminCorrectionUnavailableReason: string | null;
+  adminCorrectionEligible: boolean;
+  adminCorrectionIneligibleReason: string | null;
   lastSyncedAt: string | null;
   lastSyncedBlock: number | null;
 }

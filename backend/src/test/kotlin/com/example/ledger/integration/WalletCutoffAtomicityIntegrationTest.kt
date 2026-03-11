@@ -7,6 +7,7 @@ import com.example.ledger.domain.service.AuditService
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.clearInvocations
 import org.mockito.kotlin.doThrow
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
@@ -38,6 +39,7 @@ class WalletCutoffAtomicityIntegrationTest : IntegrationTestBase() {
         doThrow(IllegalStateException("audit storage unavailable"))
             .whenever(auditService)
             .log(any(), any(), any(), anyOrNull(), anyOrNull(), anyOrNull())
+        clearInvocations(syncPipelineUseCase)
 
         assertFailsWith<IllegalStateException> {
             ingestWalletUseCase.registerWallet(

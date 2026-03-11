@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { SyncStatus } from '@/components/SyncStatus';
 import { WalletInput } from '@/components/WalletInput';
-import type { Wallet, WalletCreatePayload } from '@/types/wallet';
+import type { Wallet, WalletAdminCorrectionApplyPayload, WalletCreatePayload } from '@/types/wallet';
 
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -60,6 +60,21 @@ export default function WalletsPage() {
     }
   }
 
+  async function handleApplyCorrection(
+    address: string,
+    payload: WalletAdminCorrectionApplyPayload
+  ) {
+    const actionKey = `correction:${address}`;
+    setBusyActionKey(actionKey);
+    setActionError(null);
+    try {
+      await api.applyWalletAdminCorrection(address, payload);
+      await loadWallets();
+    } finally {
+      setBusyActionKey(null);
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 py-12">
       <h1 className="text-3xl font-bold text-ink">지갑 등록 및 동기화</h1>
@@ -67,7 +82,13 @@ export default function WalletsPage() {
       {actionError && (
         <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{actionError}</p>
       )}
-      <SyncStatus wallets={wallets} onRetry={handleRetry} onDelete={handleDelete} busyActionKey={busyActionKey} />
+      <SyncStatus
+        wallets={wallets}
+        onRetry={handleRetry}
+        onDelete={handleDelete}
+        onApplyCorrection={handleApplyCorrection}
+        busyActionKey={busyActionKey}
+      />
     </main>
   );
 }

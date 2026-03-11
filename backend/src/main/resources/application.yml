@@ -34,3 +34,8 @@ app:
     api-key: ${COINGECKO_API_KEY:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  admin-correction:
+    users: ${ADMIN_CORRECTION_USERS:}
+    users-file: ${ADMIN_CORRECTION_USERS_FILE:}
+  sync-recovery:
+    pending-wallet-delay-ms: ${PENDING_WALLET_SYNC_RECOVERY_DELAY_MS:60000}
