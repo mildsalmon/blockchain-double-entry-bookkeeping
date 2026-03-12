@@ -1,0 +1,87 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1771741671073,
+  "projectRoot": "/Users/mildsalmon/source_code/blockchain-double-entry-bookkeeping",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 0,
+      "lastAccessed": 1771741671067,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": ".dev/specs/blockchain-double-entry-bookkeeping/idea.md",
+      "accessCount": 4,
+      "lastAccessed": 1771744320837,
+      "type": "file"
+    },
+    {
+      "path": ".dev/specs/blockchain-double-entry-bookkeeping/spec.md",
+      "accessCount": 3,
+      "lastAccessed": 1771744320221,
+      "type": "file"
+    },
+    {
+      "path": ".dev/state.json",
+      "accessCount": 3,
+      "lastAccessed": 1771744490912,
+      "type": "file"
+    },
+    {
+      "path": ".dev/events.jsonl",
+      "accessCount": 2,
+      "lastAccessed": 1771742645683,
+      "type": "file"
+    },
+    {
+      "path": ".dev/specs/blockchain-double-entry-bookkeeping/debate.md",
+      "accessCount": 2,
+      "lastAccessed": 1771744321304,
+      "type": "file"
+    },
+    {
+      "path": ".claude/settings.local.json",
+      "accessCount": 1,
+      "lastAccessed": 1771742646011,
+      "type": "file"
+    },
+    {
+      "path": ".dev/specs/blockchain-double-entry-bookkeeping/plan.md",
+      "accessCount": 1,
+      "lastAccessed": 1771744624707,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

@@ -1,0 +1,10 @@
+{"t":0,"agent":"a4a0441","agent_type":"Explore","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"ad5ec21","agent_type":"taco:critic","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a148872","agent_type":"taco:researcher","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a4a0441","agent_type":"Explore","event":"agent_stop","success":true,"duration_ms":34087}
+{"t":0,"agent":"ad5ec21","agent_type":"taco:critic","event":"agent_stop","success":true,"duration_ms":103363}
+{"t":0,"agent":"a148872","agent_type":"taco:researcher","event":"agent_stop","success":true,"duration_ms":202314}
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"taco:specify"}
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"taco:plan"}
+{"t":0,"agent":"a06da8a","agent_type":"taco:critic","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a06da8a","agent_type":"taco:critic","event":"agent_stop","success":true,"duration_ms":111438}

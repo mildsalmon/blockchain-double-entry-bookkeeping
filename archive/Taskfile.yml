@@ -1,0 +1,120 @@
+version: "3"
+
+vars:
+  JAVA17_HOME:
+    sh: |
+      if [ -d /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ]; then
+        echo /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+      elif [ -d /usr/local/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ]; then
+        echo /usr/local/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+      else
+        /usr/libexec/java_home -v 17 2>/dev/null || true
+      fi
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list-all
+
+  setup:
+    desc: Prepare local env and install frontend dependencies
+    cmds:
+      - test -f .env || cp .env.example .env
+      - cd frontend && npm install
+
+  up:
+    desc: Start local PostgreSQL
+    cmds:
+      - docker compose up -d
+
+  down:
+    desc: Stop local PostgreSQL
+    cmds:
+      - docker compose down
+
+  db:logs:
+    desc: Tail PostgreSQL logs
+    cmds:
+      - docker compose logs -f postgres
+
+  db:reset:
+    desc: "Reset local PostgreSQL volume (WARNING: deletes local data)"
+    cmds:
+      - docker compose down -v --remove-orphans
+      - docker compose up -d
+
+  backend:run:
+    desc: Run backend server (Spring Boot)
+    cmds:
+      - |
+        if [ -f .env ]; then
+          set -a
+          . ./.env
+          set +a
+        fi
+        if [ -n "${JAVA_HOME:-}" ] && [ ! -d "${JAVA_HOME}" ]; then
+          unset JAVA_HOME
+        fi
+        if [ -z "${JAVA_HOME:-}" ]; then
+          export JAVA_HOME="{{.JAVA17_HOME}}"
+        fi
+        if [ -z "${JAVA_HOME:-}" ] || [ ! -d "${JAVA_HOME}" ]; then
+          echo "JDK 17 is required. Install Java 17 or set JAVA_HOME." >&2
+          exit 1
+        fi
+        cd backend && ./gradlew bootRun
+
+  backend:test:
+    desc: Run backend tests
+    cmds:
+      - |
+        if [ -f .env ]; then
+          set -a
+          . ./.env
+          set +a
+        fi
+        if [ -n "${JAVA_HOME:-}" ] && [ ! -d "${JAVA_HOME}" ]; then
+          unset JAVA_HOME
+        fi
+        if [ -z "${JAVA_HOME:-}" ]; then
+          export JAVA_HOME="{{.JAVA17_HOME}}"
+        fi
+        if [ -z "${JAVA_HOME:-}" ] || [ ! -d "${JAVA_HOME}" ]; then
+          echo "JDK 17 is required. Install Java 17 or set JAVA_HOME." >&2
+          exit 1
+        fi
+        cd backend && ./gradlew test
+
+  frontend:dev:
+    desc: Run frontend dev server
+    cmds:
+      - |
+        if [ -f .env ]; then
+          set -a
+          . ./.env
+          set +a
+        fi
+        cd frontend && npm run dev
+
+  frontend:build:
+    desc: Build frontend for production
+    cmds:
+      - |
+        if [ -f .env ]; then
+          set -a
+          . ./.env
+          set +a
+        fi
+        cd frontend && npm run build
+
+  dev:
+    desc: Run backend and frontend together (Ctrl+C to stop)
+    cmds:
+      - task --parallel backend:run frontend:dev
+
+  verify:
+    desc: Run full local verification (backend tests + frontend build)
+    cmds:
+      - task backend:test
+      - task frontend:build
